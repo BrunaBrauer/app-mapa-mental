@@ -200,4 +200,5 @@ body {
 /* The selected topic remains visible while its floating controls are open. */
 .mind-node .node-quick-toolbar{top:auto;bottom:calc(100% + 12px)}.node-quick-toolbar .node-popover{top:auto;bottom:calc(100% + 8px)}.node-quick-toolbar .node-popover.popover-below{left:calc(100% + 10px);top:0;bottom:auto;transform:none}
 .node-quick-toolbar .node-popover.popover-below.popover-side-left{left:auto;right:calc(100% + 10px)}
+.node-popover.popover-below .quick-colors{grid-template-columns:repeat(5,minmax(0,1fr))}.node-popover.popover-below .layout-picker{grid-template-columns:repeat(2,minmax(0,1fr))}.node-popover.popover-below .quick-shapes{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(max-width:700px){.inspector{width:min(100%,340px);min-width:0}.node-quick-toolbar .node-popover.popover-below{left:50%;top:auto;bottom:calc(100% + 8px);transform:translateX(-50%)}}
