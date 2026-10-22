@@ -137,7 +137,7 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Mindora application */
+/* nodum application */
 *{box-sizing:border-box}button,input,textarea,select{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.4}
 .app-shell{--bg:#f8f9fd;--surface:#fff;--surface2:#f4f5fa;--line:#e9eaf1;--text:#23243b;--muted:#9093a7;--accent:#7057e8;--accent-soft:#f1eeff;display:flex;width:100vw;height:100dvh;overflow:hidden;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;font-size:14px}
 .app-shell.dark{--bg:#151522;--surface:#1e1e30;--surface2:#26263b;--line:#35354c;--text:#eeeefa;--muted:#a5a5ba;--accent:#9b87ff;--accent-soft:#30294b}
@@ -202,3 +202,5 @@ body {
 .node-quick-toolbar .node-popover.popover-below.popover-side-left{left:auto;right:calc(100% + 10px)}
 .node-popover.popover-below .quick-colors{grid-template-columns:repeat(5,minmax(0,1fr))}.node-popover.popover-below .layout-picker{grid-template-columns:repeat(2,minmax(0,1fr))}.node-popover.popover-below .quick-shapes{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(max-width:700px){.inspector{width:min(100%,340px);min-width:0}.node-quick-toolbar .node-popover.popover-below{left:50%;top:auto;bottom:calc(100% + 8px);transform:translateX(-50%)}}
+.login-links{display:flex;flex-wrap:wrap;gap:8px 17px;margin-top:15px}.login-links button{border:0;background:none;color:#6952dc;font:inherit;font-size:12px;font-weight:700;cursor:pointer;padding:2px 0}.ai-status{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:100;padding:12px 18px;display:flex;align-items:center;gap:9px;border-radius:12px;background:#24243b;color:#fff;box-shadow:0 12px 35px #0003}.ai-modal{max-width:540px}.ai-modal textarea,.ai-items input{width:100%;box-sizing:border-box;border:1px solid #dcdde8;border-radius:9px;padding:10px 12px;background:#fff;color:#24243b;font:inherit}.ai-items{display:grid;gap:8px;margin:18px 0}.ai-modal textarea{margin:14px 0;resize:vertical}.ai-modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:16px}
+.drive-setup{max-width:220px;margin:5px 10px 9px;color:#74758c;font-size:12px;line-height:1.4}.dropdown-menu button:disabled{opacity:.45;cursor:not-allowed}

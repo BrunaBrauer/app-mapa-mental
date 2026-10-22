@@ -1,4 +1,4 @@
-# Mindora — mapas mentais
+# nodum — mapas mentais
 
 Editor de mapas mentais em português, com React, TypeScript, Next.js 16 e React Flow. Os mapas ficam no PostgreSQL do Supabase, separados por usuário com Row Level Security (RLS), e o aplicativo pode ser hospedado na Vercel.
 
@@ -17,11 +17,11 @@ Abra `http://127.0.0.1:5173`. Para testar sem conta nem banco, altere `NEXT_PUBL
 
 Projeto: `pzhsmwhoefxoedoamdao`. As migrações em `supabase/migrations/` criam `public.mind_maps` e políticas RLS: cada usuário autenticado acessa apenas seus mapas. Links de leitura usam um UUID aleatório; a política de leitura anônima exige o token no cabeçalho `x-share-token`, sem permitir listar os demais mapas. A aplicação usa somente a chave **publicável**. Nunca coloque a chave secreta ou `service_role` em variáveis `NEXT_PUBLIC_`.
 
-O Site URL do Supabase Auth está configurado como `https://app-mapa-mental.vercel.app`. Os URLs de retorno permitidos são `http://127.0.0.1:5173/auth/callback` e `https://app-mapa-mental.vercel.app/auth/callback`. O login por e-mail usa links mágicos. Google e GitHub ainda exigem credenciais OAuth próprias: configure os respectivos provedores no painel do Supabase e então defina `NEXT_PUBLIC_ENABLE_GOOGLE_AUTH=true` ou `NEXT_PUBLIC_ENABLE_GITHUB_AUTH=true` na Vercel. Os botões aparecem somente depois de habilitados. O callback do provedor é o endereço de Auth mostrado pelo Supabase.
+Em Supabase → Authentication → URL Configuration, defina Site URL como `https://www.nodumapp.site` e inclua `https://www.nodumapp.site/auth/callback`, `https://www.nodumapp.site/auth/recovery`, `http://127.0.0.1:5173/auth/callback`, `http://127.0.0.1:5173/auth/recovery`, `http://localhost:5173/auth/callback` e `http://localhost:5173/auth/recovery` nos Redirect URLs. Mantenha URLs antigos somente se ainda precisar de links já enviados. O cadastro usa e-mail e senha, com confirmação por e-mail; também existem login por link e redefinição de senha. Google e GitHub ainda exigem credenciais OAuth próprias: configure os respectivos provedores no painel do Supabase e então defina `NEXT_PUBLIC_ENABLE_GOOGLE_AUTH=true` ou `NEXT_PUBLIC_ENABLE_GITHUB_AUTH=true` na Vercel. Os botões aparecem somente depois de habilitados. O callback do provedor é o endereço de Auth mostrado pelo Supabase.
 
 ## Vercel
 
-Produção: https://app-mapa-mental.vercel.app. Repositório: https://github.com/BrunaBrauer/app-mapa-mental. O projeto **Next.js** está conectado à branch `main` e cada push inicia um deploy. As seguintes variáveis foram configuradas em Production e Preview:
+Produção: https://www.nodumapp.site/. Repositório: https://github.com/BrunaBrauer/app-mapa-mental. O projeto **Next.js** está conectado à branch `main` e cada push inicia um deploy. As seguintes variáveis foram configuradas em Production e Preview:
 
 ```text
 NEXT_PUBLIC_STORAGE_MODE=cloud
@@ -39,6 +39,16 @@ O build não depende de uma conexão direta ao PostgreSQL; as rotas de servidor 
 - Salvamento automático, lista de mapas, duplicação, importação JSON e exportação PNG, PDF, Markdown e JSON.
 - Compartilhamento público somente leitura por token.
 - Integração manual com Google Drive para abrir/salvar cópias JSON e anexar arquivos, mediante credenciais OAuth próprias (`NEXT_PUBLIC_GOOGLE_*`). Não é sincronização automática.
+- Cadastro e login por e-mail/senha, acesso por link e redefinição de senha.
+- Sugestões Gemini para ideias, perguntas, resumo e SWOT, com revisão antes de salvar. A chave fica apenas no servidor.
+
+## Ativar Google Drive e Gemini
+
+O Google Drive precisa de um projeto Google Cloud próprio. Ative Google Picker API e Google Drive API, configure a tela de consentimento OAuth e crie um Client ID para aplicativo Web. Nas origens JavaScript autorizadas, adicione `https://www.nodumapp.site` e `http://localhost:5173`. Preencha `NEXT_PUBLIC_GOOGLE_CLIENT_ID` com o Client ID, `NEXT_PUBLIC_GOOGLE_API_KEY` com uma chave de API restrita às origens e APIs necessárias, e `NEXT_PUBLIC_GOOGLE_APP_ID` com o **número** do projeto. Configure essas variáveis na Vercel e no `.env.local` de desenvolvimento, depois faça novo deploy. O escopo usado é `drive.file`; o usuário escolhe cada arquivo pelo seletor e pode salvar uma cópia JSON. O Drive não é o banco de dados do app.
+
+Para a IA, crie uma chave no Google AI Studio e defina `GEMINI_API_KEY` apenas nas variáveis de **servidor** da Vercel e em `.env.local`. Não use o prefixo `NEXT_PUBLIC_` nessa chave. A rota `/api/ai` exige sessão Supabase, limita a entrada, aplica um intervalo mínimo de cinco segundos entre solicitações por usuário e usa `gemini-3.5-flash-lite`. A limitação em memória é apenas uma proteção inicial por instância; antes de grande volume, adote rate limiting compartilhado e cotas de custo no Google Cloud. A IA recebe o título do mapa e o texto do nó selecionado; evite incluir dados confidenciais nesses campos se não quiser enviá-los ao Google.
+
+Confirmação de e-mail e recuperação de senha dependem dos Redirect URLs do Supabase acima. O serviço de e-mail padrão do Supabase tem cotas reduzidas; configure SMTP próprio antes de abrir cadastro para muitos usuários.
 
 ## Regras de edição
 

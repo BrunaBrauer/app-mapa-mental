@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Mindora — Mapas mentais",
+  title: "nodum — Mapas mentais",
   description: "Crie, organize e compartilhe mapas mentais em qualquer dispositivo.",
   icons: {
     icon: "/favicon.svg",

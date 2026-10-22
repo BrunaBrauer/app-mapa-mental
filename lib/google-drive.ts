@@ -18,7 +18,7 @@ let accessToken = '';
 
 export function driveConfigured() { return Boolean(clientId && apiKey && appId); }
 export function preloadDrive() { if (driveConfigured()) void Promise.all([loadScript('https://accounts.google.com/gsi/client'), loadScript('https://apis.google.com/js/api.js')]).catch(() => {}); }
-function assertConfigured() { if (!driveConfigured()) throw new Error('Configure as três variáveis do Google Drive no arquivo .env.local e reinicie o servidor.'); }
+function assertConfigured() { if (!driveConfigured()) throw new Error('O Google Drive aguarda Client ID OAuth, chave de API e número do projeto Google Cloud na configuração do nodum.'); }
 
 function loadScript(url: string): Promise<void> {
   const prior = scriptPromises.get(url); if (prior) return prior;
@@ -62,15 +62,15 @@ export async function pickDriveFile(): Promise<PickerDocument | null> {
 }
 
 export async function downloadDriveFile(id: string): Promise<Blob> {
-  const oauthToken = accessToken || await token();
+  const oauthToken = await token();
   const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`, { headers: { Authorization: `Bearer ${oauthToken}` } });
   if (!response.ok) throw new Error(`Não foi possível baixar o arquivo do Drive (${response.status}).`);
   return response.blob();
 }
 
 export async function saveMapToDrive(map: MindMap): Promise<void> {
-  const oauthToken = await token(); const json = JSON.stringify(map, null, 2); const boundary = `mindora_${crypto.randomUUID().replace(/-/g, '')}`;
-  const body = new Blob([`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: `${map.title}.mindora.json`, mimeType: 'application/json' })}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n`, json, `\r\n--${boundary}--`]);
+  const oauthToken = await token(); const json = JSON.stringify(map, null, 2); const boundary = `nodum_${crypto.randomUUID().replace(/-/g, '')}`;
+  const body = new Blob([`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: `${map.title}.nodum.json`, mimeType: 'application/json' })}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n`, json, `\r\n--${boundary}--`]);
   if (body.size > 5 * 1024 * 1024) throw new Error('O mapa excede 5 MB. Reduza as imagens antes de enviar ao Drive.');
   const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', { method: 'POST', headers: { Authorization: `Bearer ${oauthToken}`, 'Content-Type': `multipart/related; boundary=${boundary}` }, body });
   if (!response.ok) throw new Error(`Não foi possível salvar no Drive (${response.status}).`);

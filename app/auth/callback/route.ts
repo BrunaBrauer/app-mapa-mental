@@ -7,7 +7,10 @@ export async function GET(request: Request) {
   if (code) {
     const client = await createClient();
     const { error } = await client.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(new URL('/', url.origin));
+    if (!error) {
+      const next = url.searchParams.get('next') || '/';
+      return NextResponse.redirect(new URL(next.startsWith('/') && !next.startsWith('//') ? next : '/', url.origin));
+    }
   }
   return NextResponse.redirect(new URL('/login?error=auth', url.origin));
 }
