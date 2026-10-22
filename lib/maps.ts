@@ -158,7 +158,20 @@ export function visibleNodes(nodes: MindNode[]): MindNode[] {
 }
 export function toMarkdown(map: MindMap): string {
   const lines = [`# ${map.title}`, '']; const root = map.nodes.find(n => !n.parentId);
-  const taskLine = (node: MindNode) => node.task ? `[${node.task.done ? 'x' : ' '}] ${node.text}` : node.text;
+  const richLabel = (node: MindNode) => {
+    if (!node.richText?.length) return node.text;
+    const escape = (value: string) => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
+    return node.richText.map(run => {
+      let value = escape(run.text);
+      if (run.bold) value = `<strong>${value}</strong>`;
+      if (run.italic) value = `<em>${value}</em>`;
+      if (run.underline) value = `<u>${value}</u>`;
+      if (run.strike) value = `<s>${value}</s>`;
+      if (run.highlight && /^#[0-9a-f]{6}$/i.test(run.highlight)) value = `<mark style="background-color:${run.highlight}">${value}</mark>`;
+      return value;
+    }).join('');
+  };
+  const taskLine = (node: MindNode) => node.task ? `[${node.task.done ? 'x' : ' '}] ${richLabel(node)}` : richLabel(node);
   const details = (node: MindNode, depth: number) => {
     if (node.label) lines.push(`${'  '.repeat(depth)}Rótulo: ${node.label}`);
     if (node.equation) lines.push(`${'  '.repeat(depth)}Equação: ${node.equation}`);
