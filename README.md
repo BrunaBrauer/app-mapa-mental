@@ -40,6 +40,14 @@ O build não depende de uma conexão direta ao PostgreSQL; as rotas de servidor 
 - Compartilhamento público somente leitura por token.
 - Integração manual com Google Drive para abrir/salvar cópias JSON e anexar arquivos, mediante credenciais OAuth próprias (`NEXT_PUBLIC_GOOGLE_*`). Não é sincronização automática.
 
+## Regras de edição
+
+- O texto de cada nó é salvo como texto simples para buscas e exportações, acompanhado dos trechos com negrito, itálico, sublinhado, riscado e cor do grifo. No painel direito, selecione uma palavra ou frase antes de usar os botões de formatação parcial. Os controles gerais de fonte, cor e alinhamento atingem o nó inteiro. O sublinhado usa um afastamento visual de 3 px.
+- Largura, altura mínima e padding são medidas em pixels, limitadas no painel para evitar caixas ilegíveis. Sem valor explícito, o nó usa o tamanho automático. A borda aceita cor, padrão e espessura de 0 a 20 px.
+- “Repetir estilo neste nível” aplica tamanho, formatação ou ambos aos outros filhos do mesmo pai já existentes e registra esse estilo para filhos criados depois. Os filhos de outros pais e descendentes mais profundos não mudam. O estilo padrão do mapa vale para novos nós quando não houver referência de nível. Modelos salvos pertencem ao mapa e aparecem no painel do nó.
+- A linha hierárquica é configurada pelo nó filho. “Aplicar esta linha a todo o nível” atualiza os irmãos e os novos filhos do mesmo pai. Uma relação livre conecta dois nós sem alterar a árvore; clicar nessa linha abre seu painel próprio. O limite visual inclui o nó selecionado e seus descendentes visíveis; ramos recolhidos permanecem no grupo, mas não ocupam área no canvas.
+- Os comandos de copiar, recortar e colar ramos usam a área de transferência interna do editor. Atalhos: `Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+Shift+C` para copiar formatação, `Ctrl+Alt+V` para colar formatação, `Ctrl+D` para duplicar, `Ctrl+L` para iniciar uma relação, `Tab` para criar filho, `Enter` para irmão e `Delete` para excluir.
+
 ## Verificação
 
 ```bash
