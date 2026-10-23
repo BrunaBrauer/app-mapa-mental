@@ -75,8 +75,8 @@ As fontes importadas pelo usuário ficam no IndexedDB do navegador. O mapa é si
 
 ## Importação e Google Drive
 
-- Importar JSON ou Mindomo (.mom) está no menu Exportar. No menu Drive, importe .json/.mom ou exporte uma cópia .nodum.json. Cada importação cria um mapa privado novo; cada exportação cria um arquivo novo, sem sobrescrever o original. O Drive é um fluxo manual de arquivos, não sincronização contínua.
-- .mom: suporte à estrutura XML Mindomo version-3.6 e JSON com topics/subTopics. Converte texto, hierarquia, notas e links HTTP(S) compatíveis; organiza à direita. Estilos, anexos, tarefas e relações não são convertidos. Pacotes comprimidos/.pmom não são suportados. Validar com arquivos reais antes de prometer fidelidade total.
+- Importar JSON ou Mindomo (.mom) tem botão próprio ao lado de Exportar. No menu Drive, importe .json/.mom ou exporte uma cópia .nodum.json. Cada importação cria um mapa privado novo; cada exportação cria um arquivo novo, sem sobrescrever o original. O Drive é um fluxo manual de arquivos, não sincronização contínua.
+- .mom: suporte à estrutura XML Mindomo version-3.6 e JSON com topics/subTopics. Converte texto, hierarquia, notas e links HTTP(S) compatíveis; organiza à direita. Estilos, anexos, tarefas e relações não são convertidos. Pacotes .mom modernos com document.json e nodes.json são aceitos; .pmom com anexos ainda não é suportado. Validar com arquivos reais antes de prometer fidelidade total.
 - Limites: 5 MB por importação/exportação Drive, 2.000 nós, 100 níveis para Mindomo e 1.000 caracteres por tópico. Arquivos inválidos não substituem mapas existentes.
 - OAuth do Drive usa drive.file; a credencial é reutilizada até expirar apenas em memória, sem persistência em localStorage. Fechar a janela ou negar acesso permite nova tentativa. É necessário validar importação/exportação com a conta Google autorizada em produção.
 - O menu de nó usa coordenadas da tela e rolagem interna, independente do zoom do canvas. Durante o arraste ele fica oculto e volta ao soltar. Nós parados mantêm suas referências e não reiniciam animações a cada movimento.

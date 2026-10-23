@@ -47,6 +47,9 @@ importers:
       fast-xml-parser:
         specifier: 5.11.2
         version: 5.11.2
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       html-to-image:
         specifier: ^1.11.13
         version: 1.11.13

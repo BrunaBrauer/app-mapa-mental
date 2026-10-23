@@ -1,4 +1,5 @@
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { unzipSync, strFromU8 } from 'fflate';
 import type { MindMap, MindNode } from '../types';
 import { autoLayout, uid } from './maps';
 import { validMap } from './server-maps';
@@ -58,6 +59,47 @@ export function parseMapFile(source: string, filename: string): { map: MindMap; 
     floatingRow = Math.max(...placed.map(item => item.y)) + 200;
   }
   return { map: { id: uid(), title, nodes: placed, layout: 'right', shareToken: null, updatedAt: Date.now() }, warning: 'Importado do Mindomo: tópicos, hierarquia, notas e links compatíveis. O layout foi organizado à direita. Estilos, anexos, tarefas e relações do Mindomo não são convertidos nesta versão.' };
+}
+
+export function parseMindomoArchive(bytes: Uint8Array, filename: string): { map: MindMap; warning?: string } {
+  if (bytes.length > 5 * 1024 * 1024 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new Error('O arquivo .mom não é um pacote Mindomo válido de até 5 MB.');
+  let files: Record<string, Uint8Array>;
+  try { files = unzipSync(bytes, { filter: entry => ['document.json', 'nodes.json'].includes(entry.name) && entry.originalSize <= 10 * 1024 * 1024 }); }
+  catch { throw new Error('Não foi possível abrir o pacote .mom.'); }
+  if (!files['document.json'] || !files['nodes.json']) throw new Error('O pacote .mom não contém o mapa e seus tópicos.');
+  let document: RecordValue; let topics: RecordValue[];
+  try {
+    document = record(JSON.parse(strFromU8(files['document.json'])));
+    const raw = JSON.parse(strFromU8(files['nodes.json']));
+    if (!Array.isArray(raw)) throw new Error('nodes');
+    topics = raw.map(record);
+  } catch { throw new Error('Os dados do pacote .mom estão inválidos.'); }
+  if (topics.length > 4000) throw new Error('O arquivo contém tópicos demais.');
+  const info = record(document.mapInfo);
+  const rootId = text(info.rootId);
+  const byId = new Map(topics.map(topic => [text(topic.id), topic]));
+  if (!rootId || !byId.has(rootId)) throw new Error('O tópico central do arquivo .mom não foi encontrado.');
+  const children = new Map<string, RecordValue[]>();
+  for (const topic of topics) {
+    const parent = text(topic.parentId);
+    if (parent) children.set(parent, [...(children.get(parent) || []), topic]);
+  }
+  const nodes: MindNode[] = [];
+  const seen = new Set<string>();
+  const visit = (topic: RecordValue, parentId: string | null, depth: number) => {
+    const sourceId = text(topic.id);
+    if (seen.has(sourceId) || topic.deleted === true || topic.deleted === 1) return;
+    if (depth > 100 || nodes.length >= 2000) throw new Error('O mapa excede 2.000 tópicos ativos ou 100 níveis.');
+    seen.add(sourceId);
+    const title = text(topic.title).replace(/<[^>]*>/g, '').trim() || 'Sem título';
+    const node: MindNode = { id: uid(), parentId, text: title.slice(0, 1000), x: 0, y: 0, background: '#ffffff', border: '#000000', icon: '' };
+    nodes.push(node);
+    (children.get(sourceId) || []).sort((a, b) => Number(a.index || 0) - Number(b.index || 0)).forEach(child => visit(child, node.id, depth + 1));
+  };
+  visit(byId.get(rootId)!, null, 0);
+  if (!nodes.length) throw new Error('O arquivo .mom não contém tópicos ativos.');
+  const title = (text(info.name) || filename.replace(/\.mom$/i, '')).slice(0, 160);
+  return { map: { id: uid(), title, nodes: autoLayout(nodes, 'right'), layout: 'right', shareToken: null, updatedAt: Date.now() }, warning: `Importados ${nodes.length} tópicos do Mindomo. A estrutura foi organizada à direita; estilos e anexos ainda não são convertidos.` };
 }
 
 function isDescendant(node: MindNode, ancestor: string, nodes: MindNode[]): boolean {
