@@ -33,7 +33,7 @@ O build não depende de uma conexão direta ao PostgreSQL; as rotas de servidor 
 
 ## Funcionalidades
 
-- Canvas infinito com zoom, pan, grade, minimapa, conexões e arraste de nós. Arrastar um dos quatro pontos do contorno até outro nó cria uma relação livre sem mudar a hierarquia.
+- Canvas infinito com zoom, pan, grade, conexões e arraste de nós. O botão “Ajustar mapa à tela” fica ao lado dos layouts. Arrastar um dos quatro pontos do contorno até outro nó cria uma relação livre sem mudar a hierarquia.
 - Menu contextual por nó para criar, editar, estilizar, anotar, comentar, anexar imagem/link, configurar tarefas e escolher 14 layouts com miniaturas. Layouts de subnós reorganizam somente o ramo.
 - Temas claro/escuro, modelos prontos, atalhos, histórico de desfazer/refazer, recolher ramos e organização automática.
 - Salvamento automático, lista de mapas, duplicação, importação JSON e exportação PNG, PDF, Markdown e JSON.
