@@ -7,7 +7,7 @@ Este documento define o comportamento esperado do editor. A experiência toma co
 1. **Mapa e propriedade.** Cada mapa pertence a uma conta. A versão na nuvem é a fonte principal; o modo local serve para desenvolvimento. Um link compartilhado dá somente leitura a quem possui o token. Google Drive guarda cópias escolhidas pelo usuário e não substitui o banco.
 2. **Estrutura.** Um mapa tem um nó central. Nós hierárquicos têm no máximo um pai, e a árvore não pode conter ciclos. O nó central não pode ser excluído ou transformado em filho. Nós flutuantes não têm pai. Relações livres ligam dois nós distintos sem mudar a árvore.
 3. **Padrões.** Mapas novos começam organizados à direita. Nós novos começam sem ícone, com fundo branco e contorno preto. Um estilo padrão do mapa pode substituir esses valores; uma referência de nível prevalece sobre o padrão do mapa. Estilos explicitamente escolhidos em mapas existentes são preservados.
-4. **Seleção.** Clique seleciona um nó e substitui a seleção anterior. Ctrl+clique alterna a presença de um nó na seleção. Ctrl+arraste a partir de uma área vazia acrescenta os nós tocados pelo retângulo. Ctrl+A seleciona os nós visíveis. Escape ou clique no fundo limpa a seleção. Uma relação selecionada e uma seleção de nós são estados mutuamente exclusivos.
+4. **Seleção.** Clique seleciona um nó e substitui a seleção anterior. Ctrl+clique alterna a presença de um nó na seleção. Ctrl+arraste (ou Shift+arraste) seleciona os nós tocados pelo retângulo, substituindo a seleção anterior. Ctrl+A seleciona os nós visíveis. Escape ou clique no fundo limpa a seleção. Uma relação selecionada e uma seleção de nós são estados mutuamente exclusivos.
 5. **Edição em lote.** Com dois ou mais nós selecionados, o menu oferece somente atributos compartilháveis: tipografia geral, cor, ícone, formato, tamanho, contorno, linha e alinhamento. O valor exibido é o do último nó selecionado; somente o controle alterado é aplicado a todos. Textos, grifos parciais, notas, comentários, links, imagens e tarefas individuais não são sobrescritos em lote. O nó central é ignorado ao editar linhas de entrada.
 6. **Posição e exclusão em lote.** Alinhar nós à esquerda, ao centro ou à direita ativa o layout livre e mantém suas posições verticais. Excluir vários nós exclui cada ramo selecionado e as relações que o tocam; o nó central continua protegido. Uma operação em lote produz uma única etapa de desfazer.
 7. **Menus.** A lista de mapas continua na lateral esquerda. Propriedades de um único nó ficam no menu contextual do próprio nó, agrupadas em texto, caixa, linha e complementos. Clicar nos indicadores de nota e comentário abre a edição rápida; clicar no indicador de link abre o destino. Relações têm menu flutuante próprio. Os menus devem deixar o nó selecionado visível quando houver espaço na tela.
@@ -23,7 +23,7 @@ Este documento define o comportamento esperado do editor. A experiência toma co
 | RF-03 | Editar texto completo ou trechos | Negrito, itálico, sublinhado, riscado e grifo de cor preservam as partes não selecionadas. |
 | RF-04 | Estilizar nó e linha no menu contextual | Cor, fonte, ícone, forma, contorno, tamanho, padding, traçado, padrão e extremidades aparecem com prévia no canvas. |
 | RF-05 | Criar relações livres por arraste | Soltar o ponto de um nó sobre outro cria a relação sem trocar pais; os lados escolhidos ficam registrados. |
-| RF-06 | Selecionar e editar vários nós | Ctrl+clique alterna, Ctrl+arraste soma, Ctrl+A seleciona visíveis; uma mudança de estilo atinge o grupo e pode ser desfeita. |
+| RF-06 | Selecionar e editar vários nós | Ctrl+clique alterna, Ctrl+arraste seleciona por área, Ctrl+A seleciona visíveis; uma mudança de estilo atinge o grupo e pode ser desfeita. |
 | RF-07 | Organizar mapas e ramos | Layout à direita é o padrão; modos automático e livre não apagam conteúdo. |
 | RF-08 | Adicionar notas, comentários, links, imagens e tarefas | O complemento pertence ao nó e é acessível por seu indicador ou menu. |
 | RF-09 | Importar e exportar | JSON preserva o mapa; PNG, PDF e Markdown produzem arquivos utilizáveis. |
@@ -43,3 +43,10 @@ Este documento define o comportamento esperado do editor. A experiência toma co
 | RNF-07 | Recuperação | Exibir estado de salvamento/erro, manter exportação JSON e permitir desfazer ações da sessão. |
 
 Antes de publicar alterações no editor, verificar lint, build, fluxos de seleção simples e múltipla, exclusão de ramos, gravação na nuvem e abertura do link público. Metas de desempenho e acessibilidade exigem verificação prática, além da compilação.
+
+## Movimento e publicação
+
+- Durante o arraste, nós e conexões acompanham o ponteiro continuamente. As posições são gravadas e entram no histórico uma vez ao soltar; o layout passa a livre.
+- O zoom é preservado ao editar, criar ou recolher nós. Ajustar à tela é uma ação explícita, além do enquadramento inicial ao abrir um mapa.
+- A elevação visual do nó durante o movimento respeita a preferência do sistema por movimento reduzido.
+- O build executa `scripts/verify-editor-css.mjs` para impedir publicação sem os estilos dos menus, seleção e arraste. A validação dos gestos no navegador continua necessária.

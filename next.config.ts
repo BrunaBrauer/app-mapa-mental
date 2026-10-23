@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Evita reutilizar artefatos CSS obsoletos entre builds restaurados pela Vercel.
+  experimental: { turbopackFileSystemCacheForBuild: false },
 };
 
 export default nextConfig;

@@ -1,0 +1,28 @@
+/* Seleção múltipla e edição contextual substituem o painel lateral de propriedades. */
+.canvas-surface{position:relative;overflow:hidden}
+.react-flow__selection,.react-flow__nodesselection-rect{border:1.5px solid #7057e8;background:#7057e818;border-radius:8px}
+.react-flow__node .mind-node{cursor:grab;transition:transform 160ms ease,box-shadow 160ms ease,filter 160ms ease}
+.react-flow__node.dragging .mind-node{transform:translateY(-2px) scale(1.025);box-shadow:0 20px 46px #2b245a45;filter:brightness(1.03);cursor:grabbing}
+.react-flow__node.dragging{transition:none!important;z-index:45!important}
+.react-flow__node.dragging .node-add,.react-flow__node.dragging .node-collapse{opacity:0;pointer-events:none}
+.react-flow__node:not(.dragging){transition:transform 180ms ease}
+@media(prefers-reduced-motion:reduce){.react-flow__node,.react-flow__node .mind-node{transition:none!important;animation:none!important}.react-flow__node.dragging .mind-node{transform:none}}
+.multi-selection-bar,.relationship-quick-toolbar{position:absolute;z-index:35;top:66px;right:24px;max-width:calc(100% - 48px);color:var(--text);font-family:'Segoe UI Variable','Segoe UI',system-ui,sans-serif}
+.multi-selection-bar.multi-left{left:24px;right:auto}
+.multi-selection-main,.relationship-quick-head{display:flex;align-items:center;flex-wrap:wrap;gap:5px;padding:7px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 26px #1d174324}
+.multi-selection-main button,.relationship-quick-head button{height:32px;display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:0 8px;border:0;border-radius:7px;background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer}
+.multi-selection-main button:hover,.multi-selection-main button.active,.relationship-quick-head button:hover{background:var(--accent-soft);color:var(--accent)}
+.multi-selection-main button:disabled{opacity:.35;cursor:not-allowed}
+.multi-selection-count{display:inline-flex;align-items:center;white-space:nowrap;padding:0 8px;color:var(--accent);font-size:11px;font-weight:800}
+.multi-selection-divider{height:19px;width:1px;background:var(--line);margin:0 3px}
+.multi-selection-main button.multi-danger:hover,.relationship-quick-head button[title="Excluir relação"]:hover{color:#d64b61;background:#fcecef}
+.multi-selection-panel,.relationship-quick-body{position:absolute;top:calc(100% + 8px);right:0;width:min(420px,calc(100vw - 24px));max-height:min(70vh,620px);overflow:auto;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 48px #1b19332e}
+.multi-selection-bar.multi-left .multi-selection-panel{left:0;right:auto}
+.multi-selection-hint{margin:0 0 13px;padding:9px 11px;background:var(--accent-soft);border-radius:7px;color:var(--muted);font-size:11px;line-height:1.45}
+.relationship-quick-toolbar{width:355px}
+.relationship-quick-head{width:100%}.relationship-quick-head>svg{margin:0 5px 0 7px;color:var(--accent)}.relationship-quick-head strong{font-size:12px;margin-right:auto}.relationship-quick-head button{padding:0 7px}
+.relationship-quick-body{width:100%;max-height:68vh}.relationship-quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.quick-template-actions{margin-top:15px;padding-top:12px;border-top:1px solid var(--line)}.quick-template-actions strong{display:block;font-size:11px;margin:10px 0 7px}.quick-template-actions>div{display:flex;flex-wrap:wrap;gap:6px}.quick-template-actions button{padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:var(--surface2);color:var(--text);font-size:11px;cursor:pointer}.quick-template-actions button:hover{border-color:var(--accent);color:var(--accent)}.quick-template-actions small{display:block;margin:7px 0 12px;color:var(--muted);font-size:10px}
+.canvas-badge{font-size:11px;max-width:min(460px,48vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:760px){.multi-selection-bar,.relationship-quick-toolbar{top:58px;right:10px;left:10px;width:auto}.multi-selection-main{overflow:auto;scrollbar-width:thin}.multi-selection-main button{flex:none;font-size:0}.multi-selection-main button svg{width:18px}.multi-selection-panel,.relationship-quick-body{width:min(400px,calc(100vw - 20px))}.canvas-badge{max-width:55vw}}
+@media(max-width:760px){.multi-selection-bar.multi-left{left:10px;right:10px}.multi-selection-bar.multi-left .multi-selection-panel{left:auto;right:0}}
