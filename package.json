@@ -26,6 +26,7 @@
     "date-fns": "^4.4.0",
     "drizzle-orm": "0.45.2",
     "embla-carousel-react": "^8.6.0",
+    "fast-xml-parser": "5.11.2",
     "html-to-image": "^1.11.13",
     "input-otp": "^1.4.2",
     "jspdf": "^3.0.3",

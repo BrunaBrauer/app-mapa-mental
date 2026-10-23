@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useViewport } from '@xyflow/react';
 import { Box, CheckSquare2, ChevronDown, Ellipsis, FileText, ImagePlus, Italic, LayoutTemplate, Link2, MessageSquareQuote, Plus, Sparkles, Strikethrough, Trash2, Type, Underline, Bold } from 'lucide-react';
 import type { LayoutMode, MindNode, NodeStyle } from '../types';
 import LayoutPicker from './LayoutPicker';
@@ -14,16 +16,55 @@ export default function NodeQuickToolbar({ node, isRoot, mapLayout, alwaysToolba
   const [open, setOpen] = useState<Panel | null>(null);
   const [mediaTab, setMediaTab] = useState<'image' | 'video' | 'audio'>('image');
   const [commentDraft, setCommentDraft] = useState('');
-  const [below, setBelow] = useState(false);
-  const [sideLeft, setSideLeft] = useState(false);
-  const [sideWidth, setSideWidth] = useState(360);
+  const viewport = useViewport();
+  const [placement, setPlacement] = useState({ x: 12, y: 80, panelX: 12, panelY: 130, width: 420, height: 400 });
+  const [host, setHost] = useState<Element | null>(null);
   useEffect(() => { if (requestedPanel) setOpen(requestedPanel.panel); }, [requestedPanel]);
   const input = useRef<HTMLInputElement>(null);
   const noteInput = useRef<HTMLTextAreaElement>(null);
   const commentInput = useRef<HTMLTextAreaElement>(null);
   const toolbar = useRef<HTMLDivElement>(null);
   const action = (name: NodeAction) => { setOpen(null); onAction(name); };
-  const menu = (name: Panel) => { const rect = toolbar.current?.getBoundingClientRect(); if (rect) { const left = rect.left > window.innerWidth - rect.right; setSideLeft(left); setSideWidth(Math.max(180, (left ? rect.left : window.innerWidth - rect.right) - 20)); setBelow(rect.top < 530); } setOpen(current => current === name ? null : name); };
+  const menu = (name: Panel) => setOpen(current => current === name ? null : name);
+  useEffect(() => {
+    // O portal sai da transformação do canvas: menus usam pixels de tela, não o zoom do mapa.
+    const update = () => {
+      const element = document.querySelector<HTMLElement>(`.react-flow__node[data-id="${CSS.escape(node.id)}"]`);
+      if (!element) return;
+      setHost(document.querySelector('.app-shell'));
+      const rect = element.getBoundingClientRect();
+      const area = document.querySelector('.canvas-surface')?.getBoundingClientRect();
+      const left = Math.max(12, (area?.left || 0) + 12);
+      const right = window.innerWidth - 12;
+      const top = Math.max(12, (area?.top || 0) + 12);
+      const bottom = window.innerHeight - 12;
+      const barWidth = Math.min(toolbar.current?.offsetWidth || 490, right - left);
+      const barHeight = toolbar.current?.offsetHeight || 48;
+      const x = Math.max(left, Math.min(right - barWidth, rect.left + rect.width / 2 - barWidth / 2));
+      let y = Math.max(top, Math.min(bottom - barHeight, rect.top - barHeight - 12));
+      const width = Math.min(open === 'notes' || open === 'comments' ? 510 : 420, right - left);
+      let height = Math.min(520, bottom - top);
+      const besideRight = right - rect.right - 16 >= width;
+      const besideLeft = rect.left - left - 16 >= width;
+      const preferredX = besideRight ? rect.right + 16 : besideLeft ? rect.left - width - 16 : x;
+      const panelX = Math.max(left, Math.min(preferredX, right - width));
+      let panelY = Math.max(top, Math.min(y, bottom - height));
+      if ((!besideRight && !besideLeft) || (panelX < x + barWidth && panelX + width > x)) {
+        // Empilhe barra e painel sem sobreposição quando não há espaço lateral.
+        if (open) y = Math.max(top, Math.min(y, bottom - barHeight - 8 - Math.min(360, height)));
+        panelY = y + barHeight + 8;
+        height = Math.max(60, Math.min(520, bottom - panelY));
+      }
+      setPlacement({ x, y, panelX, panelY, width, height });
+    };
+    const frame = requestAnimationFrame(update);
+    const observer = new ResizeObserver(update);
+    if (toolbar.current) observer.observe(toolbar.current);
+    const canvas = document.querySelector('.canvas-surface');
+    if (canvas) observer.observe(canvas);
+    window.addEventListener('resize', update);
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); window.removeEventListener('resize', update); };
+  }, [node.id, node.x, node.y, viewport.x, viewport.y, viewport.zoom, open, host]);
   useEffect(() => { const close = (event: PointerEvent) => { if (!toolbar.current?.contains(event.target as HTMLElement)) setOpen(null); }; const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(null); }; document.addEventListener('pointerdown', close); document.addEventListener('keydown', escape); return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); }; }, []);
   const addComment = () => { const text = commentDraft.trim(); if (!text) return; onPatch({ comments: [...(node.comments || []), { id: crypto.randomUUID(), text, createdAt: Date.now() }] }); setCommentDraft(''); };
   const formatDraft = (kind: 'note' | 'comment', before: string, after = before) => {
@@ -36,10 +77,11 @@ export default function NodeQuickToolbar({ node, isRoot, mapLayout, alwaysToolba
   const richControls = (kind: 'note' | 'comment') => <div className="quick-rich-controls"><button title="Título" onClick={() => formatDraft(kind, '## ', '')}>H</button><button title="Lista" onClick={() => formatDraft(kind, '- ', '')}>☷</button><button title="Negrito" onClick={() => formatDraft(kind, '**')}><Bold size={15}/></button><button title="Itálico" onClick={() => formatDraft(kind, '*')}><Italic size={15}/></button><button title="Riscado" onClick={() => formatDraft(kind, '~~')}><Strikethrough size={15}/></button><button title="Sublinhado" onClick={() => formatDraft(kind, '<u>', '</u>')}><Underline size={15}/></button><button title="Código" onClick={() => formatDraft(kind, '`')}>{'</>'}</button><button title="Link" onClick={() => formatDraft(kind, '[', '](https://exemplo.com)')}><Link2 size={15}/></button></div>;
   const row = (label: string, name: NodeAction, shortcut?: string, disabled = false) => <button className="quick-row" disabled={disabled} onClick={() => action(name)}><span>{label}</span>{shortcut && <kbd>{shortcut}</kbd>}</button>;
   const button = (panel: Panel, label: string, icon: ReactNode, arrow = false) => <button className={open === panel ? 'active' : ''} title={label} aria-label={label} aria-expanded={open === panel} onClick={() => menu(panel)}>{icon}{arrow && <ChevronDown className="quick-chevron"/>}</button>;
-  return <div ref={toolbar} className="node-quick-toolbar nodrag nopan nowheel" role="toolbar" aria-label={`Edição rápida de ${node.text}`} onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+  if (!host) return null;
+  return createPortal(<div ref={toolbar} className="node-quick-toolbar nodrag nopan nowheel nokey" style={{ position: 'fixed', left: placement.x, top: placement.y, bottom: 'auto', transform: 'none', zIndex: 60, maxWidth: 'calc(100vw - 24px)', flexWrap: 'wrap', height: 'auto', minHeight: 48 }} role="toolbar" aria-label={`Edição rápida de ${node.text}`} onPointerDown={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
     {button('insert','Inserir',<Plus/>,true)}{button('style','Texto e estilo',<Type/>)}{button('node','Editar nó',<Box/>)}{button('line','Linha de ligação',<span className="quick-line-symbol">⌁</span>)}{button('notes','Notas',<FileText/>)}{button('comments','Comentários',<MessageSquareQuote/>)}{button('media','Multimídia',<ImagePlus/>)}{button('links','Links e anexos',<Link2/>)}{button('task','Tarefa',<CheckSquare2/>)}{button('smart','Ferramentas inteligentes',<Sparkles/>)}{button('layout','Layout',<LayoutTemplate/>)}{button('more','Mais opções',<Ellipsis/>)}
     <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={e => { const file = e.target.files?.[0]; if (file) onImage(file); e.target.value = ''; }}/>
-    {open && <div className={`node-popover panel-${open} ${below ? 'popover-below' : ''} ${sideLeft ? 'popover-side-left' : ''}`} style={below ? { maxWidth: sideWidth } : undefined} onMouseDown={e => e.stopPropagation()}>
+    {open && <div className={`node-popover panel-${open}`} style={{ position: 'fixed', left: placement.panelX, top: placement.panelY, right: 'auto', bottom: 'auto', transform: 'none', width: placement.width, maxWidth: placement.width, maxHeight: placement.height, overflowY: 'auto', boxSizing: 'border-box' }} onMouseDown={e => e.stopPropagation()}>
       {open === 'insert' && <div className="quick-menu-list">{row('Inserir subnó','child','Tab')}{row('Inserir nó irmão','sibling','Enter',isRoot)}{row('Relação entre nós','relationship','Ctrl+L')}{row(node.boundary ? 'Remover limite do ramo' : 'Limite do ramo','boundary')}{row('Resumo','summary')}{row('Rótulo','label')}{row('Equação matemática','equation')}{row('Tarefa','task')}<div className="quick-separator"/>{row('Nó flutuante','floating')}{row('Duplicar ramo','duplicate','Ctrl+D',isRoot)}{row('Nó com o mesmo estilo','same-style','Alt+Enter',isRoot)}</div>}
       {open === 'style' && <QuickTextPanel node={node} fonts={fonts} favorites={favoriteIcons} onPatch={onPatch} onImportFont={onImportFont} onFavorites={onFavoriteIcons}/>}
       {open === 'node' && <QuickNodePanel node={node} onPatch={onPatch} presets={presets} onAction={name => action(name as NodeAction)}/>}
@@ -53,5 +95,5 @@ export default function NodeQuickToolbar({ node, isRoot, mapLayout, alwaysToolba
       {open === 'layout' && <div className="quick-menu-list"><span className="quick-popover-caption">LAYOUT {isRoot ? 'DO MAPA' : 'DESTE RAMO'}</span><LayoutPicker selected={node.branchLayout || mapLayout} onChoose={mode => action(mode)}/>{row(node.collapsed ? 'Expandir este ramo' : 'Recolher este ramo','collapse')}<div className="quick-separator"/><span className="quick-popover-caption">ESPAÇAMENTO</span><div className="layout-spacing">{(['spacing-compact','spacing-normal','spacing-wide'] as const).map((option, index) => <button key={option} onClick={() => action(option)}>{['Compacto','Normal','Amplo'][index]}</button>)}</div></div>}
       {open === 'more' && <div className="quick-menu-list">{row('Recortar ramo','cut','Ctrl+X',isRoot)}{row('Copiar ramo','copy','Ctrl+C')}{row('Colar ramo','paste','Ctrl+V')}{row('Copiar estilo','copy-style','Ctrl+Shift+C')}{row('Colar estilo','paste-style','Ctrl+Alt+V')}{row('Definir como estilo padrão','set-default-style')}{row('Copiar link deste nó','copy-link')}{row('Desvincular nó','detach',undefined,isRoot)}<div className="quick-separator"/><label className="quick-check"><input type="checkbox" checked={alwaysToolbar} onChange={e => onToggleAlwaysToolbar?.(e.target.checked)}/> Sempre mostrar barra do nó</label><div className="quick-separator"/>{row('Duplicar ramo','duplicate','Ctrl+D',isRoot)}{row('Excluir ramo','delete','Delete',isRoot)}</div>}
     </div>}
-  </div>;
+  </div>, host);
 }

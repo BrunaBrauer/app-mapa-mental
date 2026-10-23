@@ -54,7 +54,7 @@ Confirmação de e-mail e recuperação de senha dependem dos Redirect URLs do S
 ## Regras de edição
 
 - O texto de cada nó é salvo como texto simples para buscas e exportações, acompanhado dos trechos com negrito, itálico, sublinhado, riscado e cor do grifo. No menu contextual de texto, selecione uma palavra ou frase antes de usar os botões de formatação parcial. Os controles gerais de fonte, cor e alinhamento atingem o nó inteiro. O sublinhado usa um afastamento visual de 4 px.
-- Novos nós usam fundo branco, contorno preto e nenhum ícone, salvo quando há estilo padrão ou referência de nível definida pelo usuário. O menu rápido separa texto, nó e linha; as quatro cores rápidas podem ser refinadas por RGB ou código hexadecimal. Ícones favoritos ficam salvos no próprio mapa e aparecem em outros dispositivos que abrirem esse mapa.
+- Novos nós usam fundo branco, contorno preto e nenhum ícone, salvo quando há estilo padrão ou referência de nível definida pelo usuário. O menu rápido separa texto, nó e linha; as quatro cores rápidas podem ser refinadas por código hexadecimal (sem controles RGB). Ícones favoritos ficam salvos no próprio mapa e aparecem em outros dispositivos que abrirem esse mapa.
 - Largura, altura mínima e padding são medidas em pixels, limitadas no menu para evitar caixas ilegíveis. Sem valor explícito, o nó usa o tamanho automático. O contorno aceita cor, padrão e espessura de 0 a 20 px.
 - “Repetir estilo neste nível” aplica tamanho, formatação ou ambos aos outros filhos do mesmo pai já existentes e registra esse estilo para filhos criados depois. Os filhos de outros pais e descendentes mais profundos não mudam. O estilo padrão do mapa vale para novos nós quando não houver referência de nível. Modelos salvos pertencem ao mapa e aparecem no menu do nó.
 - A linha hierárquica é configurada pelo nó filho. “Aplicar esta linha a todo o nível” atualiza os irmãos e os novos filhos do mesmo pai. Arrastar um ponto de conexão de um nó até outro cria uma relação livre sem alterar a árvore; origem e chegada preservam os lados escolhidos. Clicar na relação abre seu menu flutuante. O limite visual inclui o nó selecionado e seus descendentes visíveis; ramos recolhidos permanecem no grupo, mas não ocupam área no canvas.
@@ -72,3 +72,13 @@ pnpm build
 ```
 
 As fontes importadas pelo usuário ficam no IndexedDB do navegador. O mapa é sincronizado entre dispositivos, mas para exibir uma fonte personalizada em outro aparelho ela precisa ser importada também nele. Imagens anexadas são reduzidas antes de serem incluídas no JSON do mapa.
+
+## Importação e Google Drive
+
+- Importar JSON ou Mindomo (.mom) está no menu Exportar. No menu Drive, importe .json/.mom ou exporte uma cópia .nodum.json. Cada importação cria um mapa privado novo; cada exportação cria um arquivo novo, sem sobrescrever o original. O Drive é um fluxo manual de arquivos, não sincronização contínua.
+- .mom: suporte à estrutura XML Mindomo version-3.6 e JSON com topics/subTopics. Converte texto, hierarquia, notas e links HTTP(S) compatíveis; organiza à direita. Estilos, anexos, tarefas e relações não são convertidos. Pacotes comprimidos/.pmom não são suportados. Validar com arquivos reais antes de prometer fidelidade total.
+- Limites: 5 MB por importação/exportação Drive, 2.000 nós, 100 níveis para Mindomo e 1.000 caracteres por tópico. Arquivos inválidos não substituem mapas existentes.
+- OAuth do Drive usa drive.file; a credencial é reutilizada até expirar apenas em memória, sem persistência em localStorage. Fechar a janela ou negar acesso permite nova tentativa. É necessário validar importação/exportação com a conta Google autorizada em produção.
+- O menu de nó usa coordenadas da tela e rolagem interna, independente do zoom do canvas. Durante o arraste ele fica oculto e volta ao soltar. Nós parados mantêm suas referências e não reiniciam animações a cada movimento.
+
+Teste do importador: `node scripts/test-import.mjs`.

@@ -1,11 +1,11 @@
 /* Seleção múltipla e edição contextual substituem o painel lateral de propriedades. */
 .canvas-surface{position:relative;overflow:hidden}
 .react-flow__selection,.react-flow__nodesselection-rect{border:1.5px solid #7057e8;background:#7057e818;border-radius:8px}
-.react-flow__node .mind-node{cursor:grab;transition:transform 160ms ease,box-shadow 160ms ease,filter 160ms ease}
-.react-flow__node.dragging .mind-node{transform:translateY(-2px) scale(1.025);box-shadow:0 20px 46px #2b245a45;filter:brightness(1.03);cursor:grabbing}
+.react-flow__node .mind-node{cursor:grab;animation:none;transition:box-shadow 160ms ease,filter 160ms ease}
+.react-flow__node.dragging .mind-node{box-shadow:0 20px 46px #2b245a45;filter:brightness(1.03);cursor:grabbing}
 .react-flow__node.dragging{transition:none!important;z-index:45!important}
 .react-flow__node.dragging .node-add,.react-flow__node.dragging .node-collapse{opacity:0;pointer-events:none}
-.react-flow__node:not(.dragging){transition:transform 180ms ease}
+.react-flow__node:not(.dragging){transition:none}
 @media(prefers-reduced-motion:reduce){.react-flow__node,.react-flow__node .mind-node{transition:none!important;animation:none!important}.react-flow__node.dragging .mind-node{transform:none}}
 .multi-selection-bar,.relationship-quick-toolbar{position:absolute;z-index:35;top:66px;right:24px;max-width:calc(100% - 48px);color:var(--text);font-family:'Segoe UI Variable','Segoe UI',system-ui,sans-serif}
 .multi-selection-bar.multi-left{left:24px;right:auto}
@@ -26,3 +26,7 @@
 .canvas-badge{font-size:11px;max-width:min(460px,48vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:760px){.multi-selection-bar,.relationship-quick-toolbar{top:58px;right:10px;left:10px;width:auto}.multi-selection-main{overflow:auto;scrollbar-width:thin}.multi-selection-main button{flex:none;font-size:0}.multi-selection-main button svg{width:18px}.multi-selection-panel,.relationship-quick-body{width:min(400px,calc(100vw - 20px))}.canvas-badge{max-width:55vw}}
 @media(max-width:760px){.multi-selection-bar.multi-left{left:10px;right:10px}.multi-selection-bar.multi-left .multi-selection-panel{left:auto;right:0}}
+
+/* Keep the portal mounted while dragging; hide it without restarting node animations. */
+.app-shell:has(.react-flow__node.dragging) .node-quick-toolbar{visibility:hidden;pointer-events:none}
+.quick-color-preview{width:40px;height:30px;flex:none;border:1px solid var(--line);border-radius:6px}
