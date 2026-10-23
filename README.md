@@ -34,7 +34,8 @@ O build não depende de uma conexão direta ao PostgreSQL; as rotas de servidor 
 ## Funcionalidades
 
 - Canvas infinito com zoom, pan, grade, conexões e arraste de nós. O botão “Ajustar mapa à tela” fica ao lado dos layouts. Arrastar um dos quatro pontos do contorno até outro nó cria uma relação livre sem mudar a hierarquia.
-- Menu contextual por nó para criar, editar, estilizar, anotar, comentar, anexar imagem/link, configurar tarefas e escolher 14 layouts com miniaturas. Layouts de subnós reorganizam somente o ramo.
+- Menu contextual por nó para criar, editar, estilizar, anotar, comentar, anexar imagem/link, configurar tarefas e escolher 14 layouts com miniaturas. Layouts de subnós reorganizam somente o ramo. A edição de propriedades não usa uma barra lateral permanente.
+- Ctrl+clique e Ctrl+arraste selecionam vários nós; o menu de grupo altera estilo e alinhamento em lote sem substituir textos ou notas individuais.
 - Temas claro/escuro, modelos prontos, atalhos, histórico de desfazer/refazer, recolher ramos e organização automática.
 - Salvamento automático, lista de mapas, duplicação, importação JSON e exportação PNG, PDF, Markdown e JSON.
 - Compartilhamento público somente leitura por token.
@@ -52,12 +53,15 @@ Confirmação de e-mail e recuperação de senha dependem dos Redirect URLs do S
 
 ## Regras de edição
 
-- O texto de cada nó é salvo como texto simples para buscas e exportações, acompanhado dos trechos com negrito, itálico, sublinhado, riscado e cor do grifo. No painel direito ou no menu rápido de texto, selecione uma palavra ou frase antes de usar os botões de formatação parcial. Os controles gerais de fonte, cor e alinhamento atingem o nó inteiro. O sublinhado usa um afastamento visual de 4 px.
+- O texto de cada nó é salvo como texto simples para buscas e exportações, acompanhado dos trechos com negrito, itálico, sublinhado, riscado e cor do grifo. No menu contextual de texto, selecione uma palavra ou frase antes de usar os botões de formatação parcial. Os controles gerais de fonte, cor e alinhamento atingem o nó inteiro. O sublinhado usa um afastamento visual de 4 px.
 - Novos nós usam fundo branco, contorno preto e nenhum ícone, salvo quando há estilo padrão ou referência de nível definida pelo usuário. O menu rápido separa texto, nó e linha; as quatro cores rápidas podem ser refinadas por RGB ou código hexadecimal. Ícones favoritos ficam salvos no próprio mapa e aparecem em outros dispositivos que abrirem esse mapa.
-- Largura, altura mínima e padding são medidas em pixels, limitadas no painel para evitar caixas ilegíveis. Sem valor explícito, o nó usa o tamanho automático. A borda aceita cor, padrão e espessura de 0 a 20 px.
-- “Repetir estilo neste nível” aplica tamanho, formatação ou ambos aos outros filhos do mesmo pai já existentes e registra esse estilo para filhos criados depois. Os filhos de outros pais e descendentes mais profundos não mudam. O estilo padrão do mapa vale para novos nós quando não houver referência de nível. Modelos salvos pertencem ao mapa e aparecem no painel do nó.
-- A linha hierárquica é configurada pelo nó filho. “Aplicar esta linha a todo o nível” atualiza os irmãos e os novos filhos do mesmo pai. Arrastar um ponto de conexão de um nó até outro cria uma relação livre sem alterar a árvore; origem e chegada preservam os lados escolhidos. Clicar na relação abre seu painel próprio. O limite visual inclui o nó selecionado e seus descendentes visíveis; ramos recolhidos permanecem no grupo, mas não ocupam área no canvas.
+- Largura, altura mínima e padding são medidas em pixels, limitadas no menu para evitar caixas ilegíveis. Sem valor explícito, o nó usa o tamanho automático. O contorno aceita cor, padrão e espessura de 0 a 20 px.
+- “Repetir estilo neste nível” aplica tamanho, formatação ou ambos aos outros filhos do mesmo pai já existentes e registra esse estilo para filhos criados depois. Os filhos de outros pais e descendentes mais profundos não mudam. O estilo padrão do mapa vale para novos nós quando não houver referência de nível. Modelos salvos pertencem ao mapa e aparecem no menu do nó.
+- A linha hierárquica é configurada pelo nó filho. “Aplicar esta linha a todo o nível” atualiza os irmãos e os novos filhos do mesmo pai. Arrastar um ponto de conexão de um nó até outro cria uma relação livre sem alterar a árvore; origem e chegada preservam os lados escolhidos. Clicar na relação abre seu menu flutuante. O limite visual inclui o nó selecionado e seus descendentes visíveis; ramos recolhidos permanecem no grupo, mas não ocupam área no canvas.
+- Seleção múltipla: Ctrl+clique alterna um nó, Ctrl+arraste a partir do fundo acrescenta todos os nós tocados pelo retângulo, Ctrl+A seleciona os nós visíveis e Escape limpa. Edição em lote atinge apenas propriedades compartilháveis; exclusão remove ramos selecionados, preservando o nó central. Alinhamento ativa o layout livre.
 - Os comandos de copiar, recortar e colar ramos usam a área de transferência interna do editor. Atalhos: `Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+Shift+C` para copiar formatação, `Ctrl+Alt+V` para colar formatação, `Ctrl+D` para duplicar, `Ctrl+L` para iniciar uma relação, `Tab` para criar filho, `Enter` para irmão e `Delete` para excluir.
+
+As regras de produto e os critérios funcionais e não funcionais estão em [docs/REGRAS_E_REQUISITOS.md](docs/REGRAS_E_REQUISITOS.md).
 
 ## Verificação
 

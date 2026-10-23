@@ -1,22 +1,24 @@
 'use client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ReactFlow, Background, BackgroundVariant, Controls, ConnectionLineType, ConnectionMode, MarkerType, ReactFlowProvider, ViewportPortal, useReactFlow, type Connection, type NodeChange, type Node, type NodePositionChange } from '@xyflow/react';
 import MindNodeView, { type FlowMindNode } from './MindNodeView';
 import type { ImportedFont } from '../lib/fonts';
 import StyledEdge from './StyledEdge';
-import type { NodeAction } from './NodeQuickToolbar';
+import type { NodeAction, NodePanel } from './NodeQuickToolbar';
 import type { LineStyle, MindMap, MindNode } from '../types';
 import { descendants, visibleNodes } from '../lib/maps';
 
-type Props = { map: MindMap; selectedId: string | null; onSelect: (id: string | null) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onOpenQuick?: (id: string, panel: 'notes' | 'comments') => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: 'notes' | 'comments'; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
+type Props = { map: MindMap; selectedId: string | null; selectedIds?: string[]; onSelect: (id: string | null) => void; onSelectMany?: (ids: string[]) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: NodePanel; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
 const nodeTypes = { mind: MindNodeView };
 const edgeTypes = { styled: StyledEdge };
 const edgeMarker = (symbol: LineStyle['end'], color: string) => symbol === 'arrow' ? { type: MarkerType.ArrowClosed, color, width: 14, height: 14 } : undefined;
 const edgeDash = (style?: LineStyle) => style?.pattern === 'dashed' ? '8 5' : style?.pattern === 'dotted' ? '2 5' : undefined;
-function InnerCanvas({ map, selectedId, onSelect, onSelectEdge, onChange, onAdd, onEdit, onToggle, onAction, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
+function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] : [], onSelect, onSelectMany, onSelectEdge, onChange, onAdd, onEdit, onToggle, onAction, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const [marquee, setMarquee] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   useEffect(() => {
     if (!flowRef) return;
     flowRef.current = { zoomIn: () => zoomIn(), zoomOut: () => zoomOut(), fit: () => fitView({ padding: 0.22, duration: 400 }) };
@@ -24,7 +26,7 @@ function InnerCanvas({ map, selectedId, onSelect, onSelectEdge, onChange, onAdd,
   }, [flowRef, zoomIn, zoomOut, fitView]);
   const visible = useMemo(() => visibleNodes(map.nodes), [map.nodes]);
   useEffect(() => { fitView({ padding: 0.3, maxZoom: 1, duration: 350 }); }, [map.id, visible.length, fitView]);
-  const nodes = useMemo<FlowMindNode[]>(() => { const childCounts = new Map<string, number>(); for (const node of map.nodes) if (node.parentId) childCounts.set(node.parentId, (childCounts.get(node.parentId) || 0) + 1); return visible.map(item => ({ id: item.id, type: 'mind', position: { x: item.x, y: item.y }, selected: item.id === selectedId, draggable: !readOnly, data: { item, childCount: childCounts.get(item.id) || 0, selected: item.id === selectedId, mapLayout: map.layout, toolbarVisible: alwaysToolbar || contextNodeId === item.id || quickPanel?.id === item.id, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, favoriteIcons: map.favoriteIcons || [], onFavoriteIcons, requestedPanel: quickPanel?.id === item.id ? quickPanel : null } })); }, [visible, map.nodes, map.layout, map.favoriteIcons, selectedId, contextNodeId, quickPanel, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons]);
+  const nodes = useMemo<FlowMindNode[]>(() => { const childCounts = new Map<string, number>(); for (const node of map.nodes) if (node.parentId) childCounts.set(node.parentId, (childCounts.get(node.parentId) || 0) + 1); return visible.map(item => ({ id: item.id, type: 'mind', position: { x: item.x, y: item.y }, selected: selectedIds.includes(item.id), draggable: !readOnly, data: { item, childCount: childCounts.get(item.id) || 0, selected: selectedIds.includes(item.id), mapLayout: map.layout, toolbarVisible: selectedIds.length === 1 && (alwaysToolbar || contextNodeId === item.id || quickPanel?.id === item.id), alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, favoriteIcons: map.favoriteIcons || [], onFavoriteIcons, presets: map.stylePresets || [], requestedPanel: quickPanel?.id === item.id ? quickPanel : null } })); }, [visible, map.nodes, map.layout, map.favoriteIcons, map.stylePresets, selectedIds, contextNodeId, quickPanel, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons]);
   const edges = useMemo(() => { const byId = new Map(visible.map(node => [node.id, node])); const tree = visible.filter(n => n.parentId && byId.has(n.parentId)).map(n => {
     const parent = byId.get(n.parentId!)!; const dx = n.x - parent.x; const dy = n.y - parent.y;
     const vertical = Math.abs(dy) > Math.abs(dx) * 1.1;
@@ -71,12 +73,37 @@ function InnerCanvas({ map, selectedId, onSelect, onSelectEdge, onChange, onAdd,
     if (map.relationships?.some(link => link.source === state.fromNode!.id && link.target === targetId && link.sourceHandle === sourceHandle && link.targetHandle === targetHandle)) return;
     onChange({ ...map, relationships: [...(map.relationships || []), { id: crypto.randomUUID(), source: state.fromNode.id, target: targetId, sourceHandle, targetHandle }] });
   }, [map, onChange, readOnly]);
-  return <div className="canvas-surface" onKeyDown={e => { if (e.code === 'Space' && !['INPUT','TEXTAREA'].includes((e.target as HTMLElement).tagName)) { setSpaceHeld(true); e.preventDefault(); } }} onKeyUp={e => { if (e.code === 'Space') setSpaceHeld(false); }} tabIndex={0}>
-    <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onConnect={onConnect} onConnectEnd={onConnectEnd} onNodeClick={(_e, node) => { setContextNodeId(null); onSelect(node.id); }} onEdgeClick={(_event, edge) => { if (readOnly) return; if (map.relationships?.some(link => link.id === edge.id)) onSelectEdge?.(edge.id); else onSelect(edge.target); }} onNodeContextMenu={(event, node) => { if (readOnly) return; event.preventDefault(); setContextNodeId(node.id); onSelect(node.id); }} onPaneClick={() => { setContextNodeId(null); onSelect(null); }} fitView fitViewOptions={{ padding: 0.3, maxZoom: 1 }} minZoom={0.18} maxZoom={2.5} panOnDrag={spaceHeld ? [0, 1, 2] : [1, 2]} zoomOnScroll selectionOnDrag={!spaceHeld && !readOnly} nodesConnectable={!readOnly} connectionMode={ConnectionMode.Loose} nodesDraggable={!readOnly} elementsSelectable connectionLineType={ConnectionLineType.SmoothStep}>
+  const startMarquee = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (readOnly || !event.ctrlKey || event.button !== 0 || !(event.target instanceof Element) || !event.target.classList.contains('react-flow__pane')) return;
+    event.preventDefault(); event.stopPropagation();
+    const surface = surfaceRef.current; if (!surface) return;
+    const bounds = surface.getBoundingClientRect();
+    const startX = event.clientX; const startY = event.clientY;
+    const move = (pointer: PointerEvent) => setMarquee({ x: Math.min(startX, pointer.clientX) - bounds.left, y: Math.min(startY, pointer.clientY) - bounds.top, width: Math.abs(pointer.clientX - startX), height: Math.abs(pointer.clientY - startY) });
+    const cleanup = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', finish); document.removeEventListener('pointercancel', cancel); setMarquee(null); };
+    const cancel = () => cleanup();
+    const finish = (pointer: PointerEvent) => {
+      cleanup();
+      const left = Math.min(startX, pointer.clientX), right = Math.max(startX, pointer.clientX);
+      const top = Math.min(startY, pointer.clientY), bottom = Math.max(startY, pointer.clientY);
+      if (right - left < 5 || bottom - top < 5) return;
+      const hits = [...surface.querySelectorAll<HTMLElement>('.react-flow__node[data-id]')].filter(element => {
+        const box = element.getBoundingClientRect();
+        return box.left <= right && box.right >= left && box.top <= bottom && box.bottom >= top;
+      }).map(element => element.dataset.id!).filter(Boolean);
+      if (hits.length) onSelectMany?.([...new Set([...selectedIds, ...hits])]);
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', finish);
+    document.addEventListener('pointercancel', cancel);
+  };
+  return <div ref={surfaceRef} className="canvas-surface" onPointerDownCapture={startMarquee} onKeyDown={e => { if (e.code === 'Space' && !['INPUT','TEXTAREA'].includes((e.target as HTMLElement).tagName)) { setSpaceHeld(true); e.preventDefault(); } }} onKeyUp={e => { if (e.code === 'Space') setSpaceHeld(false); }} tabIndex={0}>
+    <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onConnect={onConnect} onConnectEnd={onConnectEnd} onNodeClick={(event, node) => { setContextNodeId(null); if (event.ctrlKey || event.metaKey) onSelectMany?.(selectedIds.includes(node.id) ? selectedIds.filter(id => id !== node.id) : [...selectedIds, node.id]); else onSelect(node.id); }} onEdgeClick={(_event, edge) => { if (readOnly) return; if (map.relationships?.some(link => link.id === edge.id)) onSelectEdge?.(edge.id); else onSelect(edge.target); }} onNodeContextMenu={(event, node) => { if (readOnly) return; event.preventDefault(); setContextNodeId(node.id); onSelect(node.id); }} onPaneClick={(event) => { if (event.ctrlKey || event.metaKey) return; setContextNodeId(null); onSelect(null); }} fitView fitViewOptions={{ padding: 0.3, maxZoom: 1 }} minZoom={0.18} maxZoom={2.5} panOnDrag={spaceHeld ? [0, 1, 2] : [1, 2]} zoomOnScroll selectionOnDrag={false} nodesConnectable={!readOnly} connectionMode={ConnectionMode.Loose} nodesDraggable={!readOnly} elementsSelectable connectionLineType={ConnectionLineType.SmoothStep}>
       {grid && <Background variant={BackgroundVariant.Dots} gap={22} size={1.1} color="#dadde9" />}
       <ViewportPortal>{annotations.map(({ node, x, y, width, height }) => <div key={node.id} className="branch-annotation" style={{ left: x, top: y, width, height }}>{node.boundary && <div className="branch-boundary"/>}{node.summary && <div className="branch-summary">{node.summary}</div>}</div>)}</ViewportPortal>
       <Controls position="bottom-left" showInteractive={false}/>
     </ReactFlow>
+    {marquee && <div className="canvas-marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.width, height: marquee.height }}/>}
   </div>;
 }
 export default function MapCanvas(props: Props) { return <ReactFlowProvider><InnerCanvas {...props}/></ReactFlowProvider>; }

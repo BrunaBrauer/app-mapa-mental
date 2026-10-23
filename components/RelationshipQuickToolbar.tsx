@@ -1,0 +1,15 @@
+'use client';
+import { useState } from 'react';
+import { GitBranch, Trash2, X } from 'lucide-react';
+import type { LineStyle, MindMap } from '../types';
+import { QuickColor } from './QuickStylePanels';
+
+type Relationship = NonNullable<MindMap['relationships']>[number];
+export default function RelationshipQuickToolbar({ relation, onPatch, onDelete, onClose }: { relation: Relationship; onPatch: (patch: Partial<Relationship>) => void; onDelete: () => void; onClose: () => void }) {
+  const [expanded, setExpanded] = useState(true);
+  const style = relation.style || {};
+  const update = (patch: Partial<LineStyle>) => onPatch({ style: { ...style, ...patch } });
+  return <div className="relationship-quick-toolbar nodrag nopan nowheel" role="toolbar" aria-label="Editar relação entre nós"><div className="relationship-quick-head"><GitBranch size={17}/><strong>Relação entre nós</strong><button onClick={() => setExpanded(!expanded)}>{expanded ? 'Recolher' : 'Editar'}</button><button onClick={onDelete} title="Excluir relação" aria-label="Excluir relação"><Trash2 size={16}/></button><button onClick={onClose} title="Fechar" aria-label="Fechar"><X size={16}/></button></div>
+    {expanded && <div className="relationship-quick-body"><label className="quick-field">Rótulo<input value={relation.label || ''} placeholder="Ex.: influencia" onChange={event => onPatch({ label: event.target.value })}/></label><QuickColor label="Cor da linha" value={style.color} fallback="#41baa3" onChange={color => update({ color })}/><div className="relationship-quick-grid"><label className="quick-field">Espessura (px)<input type="number" min="1" max="20" value={style.width ?? 2} onChange={event => update({ width: Math.max(1, Math.min(20, Number(event.target.value))) })}/></label><label className="quick-field">Padrão<select value={style.pattern || 'dashed'} onChange={event => update({ pattern: event.target.value as LineStyle['pattern'] })}><option value="solid">Contínua</option><option value="dashed">Tracejada</option><option value="dotted">Pontilhada</option><option value="double">Dupla</option></select></label></div><label className="quick-field">Traçado<select value={style.curve || 'rounded'} onChange={event => update({ curve: event.target.value as LineStyle['curve'] })}><option value="rounded">Canto arredondado</option><option value="smooth">Curvada</option><option value="straight">Reta</option><option value="step">Em ângulo</option></select></label><div className="relationship-quick-grid">{(['start', 'end'] as const).map(side => <label className="quick-field" key={side}>{side === 'start' ? 'Origem' : 'Chegada'}<select value={style[side] || (side === 'start' ? 'none' : 'arrow')} onChange={event => update({ [side]: event.target.value as LineStyle['end'] })}><option value="none">Sem símbolo</option><option value="arrow">Seta</option><option value="circle">Círculo</option><option value="hollow-circle">Círculo vazado</option><option value="diamond">Losango</option><option value="square">Quadrado</option><option value="bar">Barra</option></select></label>)}</div></div>}
+  </div>;
+}

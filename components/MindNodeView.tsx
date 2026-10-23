@@ -3,12 +3,12 @@
 import { memo, useState } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { ChevronDown, ChevronRight, Link2, MessageSquareQuote, Plus, StickyNote } from 'lucide-react';
-import NodeQuickToolbar, { type NodeAction } from './NodeQuickToolbar';
+import NodeQuickToolbar, { type NodeAction, type NodePanel } from './NodeQuickToolbar';
 import RichTextEditor from './RichTextEditor';
-import type { LayoutMode, MindNode } from '../types';
+import type { LayoutMode, MindNode, NodeStyle } from '../types';
 import type { ImportedFont } from '../lib/fonts';
 
-export type NodeData = { item: MindNode; childCount: number; selected: boolean; mapLayout: LayoutMode; toolbarVisible?: boolean; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; readOnly?: boolean; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onOpenQuick?: (id: string, panel: 'notes' | 'comments') => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; favoriteIcons?: string[]; onFavoriteIcons?: (icons: string[]) => void; requestedPanel?: { panel: 'notes' | 'comments'; key: number } | null };
+export type NodeData = { item: MindNode; childCount: number; selected: boolean; mapLayout: LayoutMode; toolbarVisible?: boolean; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; readOnly?: boolean; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; favoriteIcons?: string[]; onFavoriteIcons?: (icons: string[]) => void; presets?: { id: string; name: string; style: Partial<NodeStyle> }[]; requestedPanel?: { panel: NodePanel; key: number } | null };
 export type FlowMindNode = Node<NodeData, 'mind'>;
 function MindNodeView({ data }: NodeProps<FlowMindNode>) {
   const { item } = data; const [editing, setEditing] = useState(false);
@@ -39,7 +39,7 @@ function MindNodeView({ data }: NodeProps<FlowMindNode>) {
     {item.label && <span className="node-extra-label">{item.label}</span>}{item.equation && <code className="node-equation">{item.equation}</code>}{item.mediaUrl && <a className="node-media-link nodrag" href={item.mediaUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{item.mediaType === 'audio' ? '♫ Abrir áudio' : '▶ Abrir vídeo'}</a>}
     {!data.readOnly && <button className="node-add nodrag" title="Adicionar subnó" onClick={e => { e.stopPropagation(); data.onAdd(item.id); }}><Plus size={14}/></button>}
     {data.childCount > 0 && <button className="node-collapse nodrag" title={item.collapsed ? 'Expandir ramo' : 'Recolher ramo'} onClick={e => { e.stopPropagation(); data.onToggle(item.id); }}>{item.collapsed ? <ChevronRight size={12}/> : <ChevronDown size={12}/>}<span>{data.childCount}</span></button>}
-    {data.selected && data.toolbarVisible && !data.readOnly && data.onAction && data.onPatch && data.onImage && data.onDrivePick && <NodeQuickToolbar node={item} isRoot={isRoot} mapLayout={data.mapLayout} alwaysToolbar={data.alwaysToolbar ?? true} onToggleAlwaysToolbar={data.onToggleAlwaysToolbar} onAction={action => data.onAction!(item.id, action)} onPatch={patch => data.onPatch!(item.id, patch)} onImage={file => data.onImage!(item.id, file)} onDrivePick={kind => data.onDrivePick!(item.id, kind)} fonts={data.fonts} onImportFont={file => data.onImportFont?.(item.id, file) ?? Promise.resolve()} favoriteIcons={data.favoriteIcons} onFavoriteIcons={data.onFavoriteIcons} requestedPanel={data.requestedPanel}/>}
+    {data.selected && data.toolbarVisible && !data.readOnly && data.onAction && data.onPatch && data.onImage && data.onDrivePick && <NodeQuickToolbar node={item} isRoot={isRoot} mapLayout={data.mapLayout} alwaysToolbar={data.alwaysToolbar ?? true} onToggleAlwaysToolbar={data.onToggleAlwaysToolbar} onAction={action => data.onAction!(item.id, action)} onPatch={patch => data.onPatch!(item.id, patch)} onImage={file => data.onImage!(item.id, file)} onDrivePick={kind => data.onDrivePick!(item.id, kind)} fonts={data.fonts} onImportFont={file => data.onImportFont?.(item.id, file) ?? Promise.resolve()} favoriteIcons={data.favoriteIcons} onFavoriteIcons={data.onFavoriteIcons} presets={data.presets} requestedPanel={data.requestedPanel}/>}
   </div>;
 }
 export default memo(MindNodeView);
