@@ -19,6 +19,8 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
   const dragPositions = useRef(new Map<string, { x: number; y: number; dragging: boolean }>());
   const [livePositions, setLivePositions] = useState(() => new Map<string, { x: number; y: number; dragging: boolean }>());
+  const selectionRef = useRef(selectedIds);
+  useEffect(() => { selectionRef.current = selectedIds; }, [selectedIds]);
   useEffect(() => {
     if (!flowRef) return;
     flowRef.current = { zoomIn: () => zoomIn(), zoomOut: () => zoomOut(), fit: () => fitView({ padding: 0.22, duration: 400 }) };
@@ -46,9 +48,13 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     if (readOnly) return;
     const selection = changes.filter(change => change.type === 'select');
     if (selection.length) {
-      const next = new Set(selectedIds);
+      const previous = selectionRef.current;
+      const next = new Set(previous);
       for (const change of selection) { if (change.selected) next.add(change.id); else next.delete(change.id); }
-      if (next.size !== selectedIds.length || selectedIds.some(id => !next.has(id))) onSelectMany?.([...next]);
+      if (next.size !== previous.length || previous.some(id => !next.has(id))) {
+        selectionRef.current = [...next];
+        onSelectMany?.(selectionRef.current);
+      }
     }
     const moved = changes.filter((c): c is NodePositionChange => c.type === 'position' && Boolean(c.position));
     if (!moved.length) return;
@@ -62,7 +68,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     if (changed) onChange({ ...map, layout: 'free', nodes: map.nodes.map(node => { const position = positions.get(node.id); return position ? { ...node, x: position.x, y: position.y } : node; }) });
     dragPositions.current = new Map();
     setLivePositions(new Map());
-  }, [map, onChange, onSelectMany, selectedIds, readOnly]);
+  }, [map, onChange, onSelectMany, readOnly]);
   const onConnect = useCallback((connection: Connection) => {
     if (readOnly || !connection.source || !connection.target || connection.source === connection.target) return;
     // O gesto nos conectores cria uma relação livre sem alterar a árvore.
