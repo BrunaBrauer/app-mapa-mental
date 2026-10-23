@@ -75,9 +75,10 @@ As fontes importadas pelo usuário ficam no IndexedDB do navegador. O mapa é si
 
 ## Importação e Google Drive
 
-- Importar JSON ou Mindomo (.mom) tem botão próprio ao lado de Exportar. No menu Drive, importe .json/.mom ou exporte uma cópia .nodum.json. Cada importação cria um mapa privado novo; cada exportação cria um arquivo novo, sem sobrescrever o original. O Drive é um fluxo manual de arquivos, não sincronização contínua.
-- .mom: suporte à estrutura XML Mindomo version-3.6 e JSON com topics/subTopics. Converte texto, hierarquia, notas e links HTTP(S) compatíveis; organiza à direita. Estilos, anexos, tarefas e relações não são convertidos. Pacotes .mom modernos com document.json e nodes.json são aceitos; .pmom com anexos ainda não é suportado. Validar com arquivos reais antes de prometer fidelidade total.
-- Limites: 5 MB por importação/exportação Drive, 2.000 nós, 100 níveis para Mindomo e 1.000 caracteres por tópico. Arquivos inválidos não substituem mapas existentes.
+- Importar tem botão próprio ao lado de Exportar. Aceita backup JSON do nodum e arquivos Mindomo `.mom`, `.pmom`, `.txt`, `.md` e `.markdown`, inclusive pelo menu Drive. Cada importação cria um mapa privado novo; a cópia do arquivo original não é alterada. O Drive é um fluxo manual de arquivos, não sincronização contínua.
+- `.mom`/`.pmom`: aceita XML/JSON hierárquico e pacotes Mindomo com `document.json` e `nodes.json`, inclusive quando `.pmom` contém um `.mom` interno. Converte tópicos e hierarquia para um mapa organizado à direita. Em mapas com mais de 100 tópicos, ramos principais com descendentes começam recolhidos para a visualização inicial ficar legível; todos os tópicos continuam no mapa. Estilos e anexos Mindomo ainda não são convertidos.
+- `.txt`: usa a indentação por tabulações (ou pares de espaços) para reconstruir a hierarquia. `.md`/`.markdown`: aceita títulos `#`, `##` e listas com indentação. Recursos fora da estrutura textual podem não ser convertidos. Como exportações do Mindomo variam, use o contador de ideias após importar para conferir o resultado.
+- Limites: pacote até 25 MB, texto até 5 MB, 2.000 nós, 100 níveis e 1.000 caracteres por tópico. Arquivos inválidos não substituem mapas existentes. Exportação para Drive continua em JSON até 5 MB.
 - OAuth do Drive usa drive.file; a credencial é reutilizada até expirar apenas em memória, sem persistência em localStorage. Fechar a janela ou negar acesso permite nova tentativa. É necessário validar importação/exportação com a conta Google autorizada em produção.
 - O menu de nó usa coordenadas da tela e rolagem interna, independente do zoom do canvas. Durante o arraste ele fica oculto e volta ao soltar. Nós parados mantêm suas referências e não reiniciam animações a cada movimento.
 
