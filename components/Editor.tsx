@@ -13,9 +13,10 @@ import { importFontFile, loadImportedFonts, type ImportedFont } from '../lib/fon
 import { downloadDriveFile, driveConfigured, pickDriveFile, preloadDrive, saveMapToDrive } from '../lib/google-drive';
 import { parseMapFile } from '../lib/import-map';
 import { pickNodeStyle } from '../lib/node-style';
+import { defaultPreferences, normalizePreferences, type Preferences } from '../lib/preferences';
 import type { MindMap, MindNode } from '../types';
 
-type Props = { userName: string; signOutPath: string };
+type Props = { userName: string; signOutPath: string; initialPreferences?: Preferences };
 type Status = 'loading' | 'saved' | 'saving' | 'error';
 function download(name: string, data: Blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(data); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
 function safeName(text: string) { return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9-_]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'mapa'; }
@@ -55,12 +56,48 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const body = await r.json() as { error?: string }; if (!r.ok) throw new Error(body.error || 'Falha na conexão'); return body as T;
 }
 
-export default function Editor({ userName, signOutPath }: Props) {
+export default function Editor({ userName, signOutPath, initialPreferences = defaultPreferences }: Props) {
   const [maps, setMaps] = useState<MindMap[]>([]); const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null); const [selectedIds, setSelectedIds] = useState<string[]>([]); const [status, setStatus] = useState<Status>('loading');
   const selectOne = useCallback((id: string | null) => { setSelectedId(id); setSelectedIds(id ? [id] : []); }, []);
-  const [dark, setDark] = useState(false); const [grid, setGrid] = useState(true); const [sidebar, setSidebar] = useState(true);
-  const [alwaysToolbar, setAlwaysToolbar] = useState(true);
+  const [dark, setDark] = useState(initialPreferences.dark); const [grid, setGrid] = useState(initialPreferences.grid); const [sidebar, setSidebar] = useState(initialPreferences.sidebar);
+  const [alwaysToolbar, setAlwaysToolbar] = useState(initialPreferences.alwaysToolbar);
+  const [preferencesReady, setPreferencesReady] = useState(!localMode);
+  const [preferenceError, setPreferenceError] = useState(false);
+  const savedPreferences = useRef(JSON.stringify(initialPreferences));
+  const preferenceQueue = useRef(Promise.resolve());
+  useEffect(() => {
+    if (!localMode) return;
+    const frame = requestAnimationFrame(() => {
+    try {
+      const stored = normalizePreferences(JSON.parse(localStorage.getItem('nodum:preferences:v1') || '{}'));
+      setDark(stored.dark); setGrid(stored.grid); setSidebar(stored.sidebar); setAlwaysToolbar(stored.alwaysToolbar);
+      savedPreferences.current = JSON.stringify(stored);
+    } catch { /* Keep defaults if browser storage is unavailable. */ }
+    setPreferencesReady(true);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  useEffect(() => {
+    if (!preferencesReady) return;
+    const value = JSON.stringify({ dark, grid, sidebar, alwaysToolbar });
+    if (value === savedPreferences.current) return;
+    const timer = setTimeout(() => {
+      savedPreferences.current = value;
+      // Serialize writes so an older request cannot overwrite a newer preference.
+      preferenceQueue.current = preferenceQueue.current.then(async () => {
+        try {
+          if (localMode) localStorage.setItem('nodum:preferences:v1', value);
+          else {
+            const response = await fetch('/api/preferences', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: value, keepalive: true });
+            if (!response.ok) throw new Error('Preference save failed');
+          }
+          setPreferenceError(false);
+        } catch { setPreferenceError(true); }
+      });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [dark, grid, sidebar, alwaysToolbar, preferencesReady]);
   const [search, setSearch] = useState(''); const [exportOpen, setExportOpen] = useState(false); const [driveOpen, setDriveOpen] = useState(false); const [shareOpen, setShareOpen] = useState(false); const [linkCopied, setLinkCopied] = useState(false);
   const [history, setHistory] = useState<{ past: MindMap[]; future: MindMap[] }>({ past: [], future: [] });
   const [fonts, setFonts] = useState<ImportedFont[]>([]);
@@ -102,12 +139,12 @@ export default function Editor({ userName, signOutPath }: Props) {
         const target = maps.find(map => map.id === params.get('map'));
         setMaps(maps); setActiveId(target?.id ?? maps[0]?.id ?? null);
         if (target?.nodes.some(node => node.id === params.get('node'))) selectOne(params.get('node'));
-        setAlwaysToolbar(localStorage.getItem('mindora:always-toolbar') !== '0'); setStatus(migrationFailed ? 'error' : 'saved');
+        setStatus(migrationFailed ? 'error' : 'saved');
       } catch { setStatus('error'); }
     };
     void load();
   }, [selectOne]);
-  const toggleAlwaysToolbar = (value: boolean) => { setAlwaysToolbar(value); localStorage.setItem('mindora:always-toolbar', value ? '1' : '0'); };
+  const toggleAlwaysToolbar = (value: boolean) => setAlwaysToolbar(value);
   useEffect(() => { loadImportedFonts().then(setFonts).catch(() => {}); }, []);
   useEffect(() => { preloadDrive(); }, []);
   const save = useCallback((map: MindMap) => { const prior = saveTimers.current.get(map.id); if (prior) clearTimeout(prior); setStatus('saving'); saveTimers.current.set(map.id, setTimeout(async () => { try { const result = await api<{ map: MindMap }>(`/api/maps/${map.id}`, { method: 'PUT', body: JSON.stringify(map) }); setMaps(current => current.map(m => m.id === map.id && m.updatedAt === map.updatedAt ? { ...m, updatedAt: result.map.updatedAt } : m)); setStatus('saved'); } catch { setStatus('error'); } saveTimers.current.delete(map.id); }, 650)); }, []);
@@ -298,7 +335,7 @@ export default function Editor({ userName, signOutPath }: Props) {
       <div className="sidebar-section templates"><div className="section-caption"><span>TEMPLATES</span><LayoutTemplate size={15}/></div><button onClick={() => addMap('projeto')}><span className="template-icon lavender">◈</span>Planejamento de projeto<ArrowRight size={14}/></button><button onClick={() => addMap('brainstorming')}><span className="template-icon yellow">✳</span>Brainstorming<ArrowRight size={14}/></button><button onClick={() => addMap('swot')}><span className="template-icon mint">▦</span>Análise SWOT<ArrowRight size={14}/></button></div>
       <div className="sidebar-bottom"><div className="tip-card"><span>✦ DICA RÁPIDA</span><p>Selecione uma ideia e pressione <kbd>Tab</kbd> para criar um subnó.</p></div><div className="profile"><span className="avatar">{userName.charAt(0).toUpperCase()}</span><span className="profile-name">{userName}</span>{!localMode && <a href={signOutPath} target="_top" title="Sair"><LogOut size={16}/></a>}</div></div>
     </aside>
-    <main className="main-area"><header className="toolbar"><div className="toolbar-left">{!sidebar && <button className="icon-button" onClick={() => setSidebar(true)} aria-label="Abrir menu"><Menu size={19}/></button>}<span className="crumb">Meus mapas</span><span className="crumb-sep">/</span>{active ? <input className="map-title" aria-label="Nome do mapa" value={active.title} onChange={e => commit({ ...active, title: e.target.value })} /> : <span className="map-title placeholder">Bem-vindo</span>}<span className={`save-status ${status}`}>{status === 'saving' ? <LoaderCircle size={13} className="spin"/> : status === 'error' ? <AlertCircle size={13}/> : <Check size={13}/>} {status === 'saving' ? 'Salvando' : status === 'error' ? 'Falha ao salvar' : status === 'loading' ? 'Carregando' : (localMode ? 'Salvo neste navegador' : 'Salvo na nuvem')}</span></div><div className="toolbar-right"><button className="icon-button" title="Desfazer" disabled={!history.past.length} onClick={undo}><Undo2 size={18}/></button><button className="icon-button" title="Refazer" disabled={!history.future.length} onClick={redo}><Redo2 size={18}/></button><span className="toolbar-divider"/><button className="icon-button" title={dark ? 'Tema claro' : 'Tema escuro'} onClick={() => setDark(!dark)}>{dark ? <Sun size={18}/> : <Moon size={18}/>}</button><div className="dropdown-wrap"><input ref={importRef} type="file" accept="application/json,.json,.mom" hidden onChange={e => importJson(e.target.files?.[0])}/><button className="outline-button" disabled={!active} onClick={() => setExportOpen(!exportOpen)}><ArrowDownToLine size={16}/> Exportar <ChevronDown size={14}/></button>{exportOpen && <div className="dropdown-menu"><button onClick={() => exportFile('png')}>Imagem PNG</button><button onClick={() => exportFile('pdf')}>Documento PDF</button><button onClick={() => exportFile('md')}>Markdown</button><button onClick={() => exportFile('json')}>Arquivo JSON</button><button onClick={() => { setExportOpen(false); importRef.current?.click(); }}>Importar JSON ou Mindomo (.mom)</button></div>}</div><div className="dropdown-wrap"><button className="outline-button drive-button" disabled={driveBusy} onClick={() => setDriveOpen(!driveOpen)} title="Google Drive"><Cloud size={16}/> {driveBusy ? 'Processando…' : 'Drive'} <ChevronDown size={14}/></button>{driveOpen && <div className="dropdown-menu">{!driveConfigured() && <p className="drive-setup">Conecte o Google Cloud para ativar o Drive. Veja o README.</p>}<button disabled={!driveConfigured()} onClick={importFromDrive}>Importar do Drive (.json / .mom)</button><button disabled={!driveConfigured() || !active} onClick={backupToDrive}>Exportar cópia para o Drive (.json)</button></div>}</div><button className="share-button" disabled={!active} onClick={share}><Share2 size={16}/> Compartilhar</button></div></header>
+    <main className="main-area">{preferenceError && <div role="alert" className="preferences-error">Não foi possível salvar suas preferências na conta. Altere uma opção para tentar novamente.</div>}<header className="toolbar"><div className="toolbar-left">{!sidebar && <button className="icon-button" onClick={() => setSidebar(true)} aria-label="Abrir menu"><Menu size={19}/></button>}<span className="crumb">Meus mapas</span><span className="crumb-sep">/</span>{active ? <input className="map-title" aria-label="Nome do mapa" value={active.title} onChange={e => commit({ ...active, title: e.target.value })} /> : <span className="map-title placeholder">Bem-vindo</span>}<span className={`save-status ${status}`}>{status === 'saving' ? <LoaderCircle size={13} className="spin"/> : status === 'error' ? <AlertCircle size={13}/> : <Check size={13}/>} {status === 'saving' ? 'Salvando' : status === 'error' ? 'Falha ao salvar' : status === 'loading' ? 'Carregando' : (localMode ? 'Salvo neste navegador' : 'Salvo na nuvem')}</span></div><div className="toolbar-right"><button className="icon-button" title="Desfazer" disabled={!history.past.length} onClick={undo}><Undo2 size={18}/></button><button className="icon-button" title="Refazer" disabled={!history.future.length} onClick={redo}><Redo2 size={18}/></button><span className="toolbar-divider"/><button className="icon-button" title={dark ? 'Tema claro' : 'Tema escuro'} onClick={() => setDark(!dark)}>{dark ? <Sun size={18}/> : <Moon size={18}/>}</button><div className="dropdown-wrap"><input ref={importRef} type="file" accept="application/json,.json,.mom" hidden onChange={e => importJson(e.target.files?.[0])}/><button className="outline-button" disabled={!active} onClick={() => setExportOpen(!exportOpen)}><ArrowDownToLine size={16}/> Exportar <ChevronDown size={14}/></button>{exportOpen && <div className="dropdown-menu"><button onClick={() => exportFile('png')}>Imagem PNG</button><button onClick={() => exportFile('pdf')}>Documento PDF</button><button onClick={() => exportFile('md')}>Markdown</button><button onClick={() => exportFile('json')}>Arquivo JSON</button><button onClick={() => { setExportOpen(false); importRef.current?.click(); }}>Importar JSON ou Mindomo (.mom)</button></div>}</div><div className="dropdown-wrap"><button className="outline-button drive-button" disabled={driveBusy} onClick={() => setDriveOpen(!driveOpen)} title="Google Drive"><Cloud size={16}/> {driveBusy ? 'Processando…' : 'Drive'} <ChevronDown size={14}/></button>{driveOpen && <div className="dropdown-menu">{!driveConfigured() && <p className="drive-setup">Conecte o Google Cloud para ativar o Drive. Veja o README.</p>}<button disabled={!driveConfigured()} onClick={importFromDrive}>Importar do Drive (.json / .mom)</button><button disabled={!driveConfigured() || !active} onClick={backupToDrive}>Exportar cópia para o Drive (.json)</button></div>}</div><button className="share-button" disabled={!active} onClick={share}><Share2 size={16}/> Compartilhar</button></div></header>
       {active ? <div className="workspace"><div className="canvas-wrap"><div className="canvas-top"><div className="canvas-badge"><span className="pulse-dot"/> {relationSourceId ? 'Clique em outro nó para criar a relação' : selectedIds.length > 1 ? `${selectedIds.length} nós selecionados · Ctrl+clique para alternar` : 'Ctrl+clique ou Ctrl+arraste para selecionar vários nós'}</div><div className="canvas-actions"><button className={grid ? 'active' : ''} onClick={() => setGrid(!grid)} title="Alternar grade"><Grid3X3 size={17}/></button><span/><button onClick={() => flowRef.current?.zoomOut()} title="Diminuir zoom"><ZoomOut size={17}/></button><button onClick={() => flowRef.current?.zoomIn()} title="Aumentar zoom"><ZoomIn size={17}/></button></div></div><MapCanvas map={active} selectedId={selectedId} selectedIds={selectedIds} onSelect={selectCanvasNode} onSelectMany={selectMany} onSelectEdge={selectCanvasEdge} onChange={commit} onAdd={addChild} onEdit={editNode} onToggle={toggleNode} onAction={quickAction} onOpenQuick={openQuickPanel} quickPanel={quickPanel} fonts={fonts} onImportFont={importFontForNode} onFavoriteIcons={setFavoriteIcons} onPatch={patchNodeById} onImage={quickImage} onDrivePick={quickDrivePick} alwaysToolbar={alwaysToolbar} onToggleAlwaysToolbar={toggleAlwaysToolbar} grid={grid} flowRef={flowRef}/><div className="canvas-bottom"><span>{active.nodes.length} ideias <span className="bullet">·</span> {active.nodes.filter(n => n.parentId).length} conexões</span><div className="layout-control"><button onClick={() => commit({ ...active, layout: 'balanced', nodes: layoutMap(active.nodes, 'balanced', active.spacing) })} className={active.layout === 'balanced' ? 'active' : ''}>Equilibrado</button><button onClick={() => commit({ ...active, layout: 'right', nodes: layoutMap(active.nodes, 'right', active.spacing) })} className={active.layout === 'right' ? 'active' : ''}>À direita</button><button onClick={() => commit({ ...active, layout: 'free' })} className={active.layout === 'free' ? 'active' : ''}>Livre</button><button onClick={() => flowRef.current?.fit()} title="Ajustar mapa à tela" aria-label="Ajustar mapa à tela"><Maximize size={15}/></button></div><button className="organize" onClick={() => commit({ ...active, layout: active.layout === 'free' ? 'right' : active.layout, nodes: layoutMap(active.nodes, active.layout === 'free' ? 'right' : active.layout, active.spacing) })}><WandSparkles size={15}/> Organizar</button></div></div>
         {selectedNodes.length > 1 && <MultiNodeToolbar nodes={selectedNodes} fonts={fonts} favoriteIcons={active.favoriteIcons || []} onPatch={patchMany} onImportFont={importFontForMany} onFavoriteIcons={setFavoriteIcons} onAlign={alignMany} onDelete={removeMany} onClear={() => selectMany([])}/>}
         {selectedRelationship && <RelationshipQuickToolbar relation={selectedRelationship} onPatch={patchRelationship} onDelete={deleteRelationship} onClose={() => setSelectedEdgeId(null)}/>}

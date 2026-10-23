@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bold, Italic, Strikethrough, Underline } from 'lucide-react';
 import { readRichText, richTextHtml } from '../lib/rich-text';
 import type { RichRun } from '../types';
@@ -7,7 +7,7 @@ import type { RichRun } from '../types';
 type Props = { nodeId: string; text: string; runs?: RichRun[]; onChange: (text: string, runs: RichRun[]) => void; compact?: boolean; autoFocus?: boolean; onDone?: () => void };
 export default function RichTextEditor({ nodeId, text, runs, onChange, compact, autoFocus, onDone }: Props) {
   const editor = useRef<HTMLDivElement>(null);
-  const color = useRef('#fff0a8');
+  const [color, setColor] = useState('#fff0a8');
   const selection = useRef<Range | null>(null);
   const lastNode = useRef<string | null>(null);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -47,8 +47,8 @@ export default function RichTextEditor({ nodeId, text, runs, onChange, compact, 
       <button type="button" onMouseDown={event => event.preventDefault()} title="Sublinhado no trecho selecionado" onClick={() => command('underline')}><Underline size={15}/></button>
       <button type="button" onMouseDown={event => event.preventDefault()} title="Riscado no trecho selecionado" onClick={() => command('strikeThrough')}><Strikethrough size={15}/></button>
       {['#fff0a8','#ffcce0','#b7efc5','#bcdfff'].map(value => <button key={value} type="button" aria-label={`Grifar com ${value}`} title={value} style={{ background: value, width: 24 }} onMouseDown={event => event.preventDefault()} onClick={() => command('hiliteColor', value)}/>)}
-      <label title="Cor hexadecimal do destaque"><input type="text" defaultValue="#fff0a8" maxLength={7} aria-label="Cor hexadecimal do destaque" style={{ width: 82 }} onChange={event => { color.current = event.target.value; }}/></label>
-      <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => { if (/^#[0-9a-f]{6}$/i.test(color.current)) command('hiliteColor', color.current); }}>Grifar</button>
+      <input type="color" aria-label="Escolher cor do grifo" value={/^#[0-9a-f]{6}$/i.test(color) ? color : '#fff0a8'} onChange={event => { setColor(event.target.value); command('hiliteColor', event.target.value); }}/><label title="Cor hexadecimal do destaque"><input type="text" value={color} maxLength={7} aria-label="Cor hexadecimal do destaque" style={{ width: 82 }} onChange={event => { setColor(event.target.value); }}/></label>
+      <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => { if (/^#[0-9a-f]{6}$/i.test(color)) command('hiliteColor', color); }}>Grifar</button>
       <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => command('hiliteColor', 'transparent')}>Sem grifo</button>
     </div>}
     <div ref={editor} className="rich-editable nodrag" contentEditable role="textbox" aria-label="Texto formatado do nó" aria-multiline="true" suppressContentEditableWarning onInput={() => { if (pending.current) clearTimeout(pending.current); pending.current = setTimeout(save, 450); }} onMouseUp={rememberSelection} onKeyUp={rememberSelection} onBlur={() => { save(); onDone?.(); }} onPaste={event => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); }} onKeyDown={event => { if (compact && event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); editor.current?.blur(); } if (event.key === 'Escape') editor.current?.blur(); }} />

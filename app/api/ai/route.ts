@@ -34,7 +34,10 @@ export async function POST(request: Request) {
       method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 600, responseFormat: { text: { mimeType: 'APPLICATION_JSON', schema: { type: 'object', properties: { items: { type: 'array', items: { type: 'string' } }, summary: { type: 'string' } }, required: ['items', 'summary'] } } } } }),
     });
-    if (!response.ok) return NextResponse.json({ error: response.status === 429 ? 'O limite da IA foi atingido. Tente novamente mais tarde.' : 'A IA está indisponível no momento.' }, { status: 502 });
+    if (!response.ok) {
+      const message = response.status === 429 ? 'A cota do Gemini foi atingida. Verifique o limite do projeto Google e tente novamente mais tarde.' : [400, 401, 403].includes(response.status) ? 'O Gemini recusou a configuração. Verifique a chave GEMINI_API_KEY e suas permissões na Vercel.' : response.status === 404 ? 'O modelo Gemini configurado não está disponível.' : 'A IA está indisponível no momento.';
+      return NextResponse.json({ error: message }, { status: response.status === 429 ? 429 : 502 });
+    }
     const payload = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     const text = payload.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('') || '';
     const result = JSON.parse(text) as { items?: unknown; summary?: unknown };

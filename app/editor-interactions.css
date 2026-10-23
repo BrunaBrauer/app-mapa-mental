@@ -1,10 +1,10 @@
 /* Seleção múltipla e edição contextual substituem o painel lateral de propriedades. */
 .canvas-surface{position:relative;overflow:hidden}
 .react-flow__selection,.react-flow__nodesselection-rect{border:1.5px solid #7057e8;background:#7057e818;border-radius:8px}
-.react-flow__node .mind-node{cursor:grab;animation:none;transition:box-shadow 160ms ease,filter 160ms ease}
-.react-flow__node.dragging .mind-node{box-shadow:0 20px 46px #2b245a45;filter:brightness(1.03);cursor:grabbing}
+.react-flow__node .mind-node{cursor:grab;animation:none;transition:none}
+.react-flow__node.dragging .mind-node{cursor:grabbing}
 .react-flow__node.dragging{transition:none!important;z-index:45!important}
-.react-flow__node.dragging .node-add,.react-flow__node.dragging .node-collapse{opacity:0;pointer-events:none}
+.react-flow__node.dragging .node-add,.react-flow__node.dragging .node-collapse{pointer-events:none}
 .react-flow__node:not(.dragging){transition:none}
 @media(prefers-reduced-motion:reduce){.react-flow__node,.react-flow__node .mind-node{transition:none!important;animation:none!important}.react-flow__node.dragging .mind-node{transform:none}}
 .multi-selection-bar,.relationship-quick-toolbar{position:absolute;z-index:35;top:66px;right:24px;max-width:calc(100% - 48px);color:var(--text);font-family:'Segoe UI Variable','Segoe UI',system-ui,sans-serif}
@@ -30,3 +30,7 @@
 /* Keep the portal mounted while dragging; hide it without restarting node animations. */
 .app-shell:has(.react-flow__node.dragging) .node-quick-toolbar{visibility:hidden;pointer-events:none}
 .quick-color-preview{width:40px;height:30px;flex:none;border:1px solid var(--line);border-radius:6px}
+
+.font-import-button{display:flex;align-items:center;gap:12px;width:100%;padding:12px;border:1px dashed var(--line);border-radius:10px;background:var(--surface2);color:var(--accent);text-align:left;cursor:pointer}.font-import-button svg{flex:none}.font-import-button span{display:flex;flex-direction:column;gap:4px}.font-import-button strong{font-size:12px}.font-import-button small,.font-import-hint{font-size:11px;color:var(--muted);line-height:1.5}.font-import-hint{display:block;margin:6px 0 12px;overflow-wrap:anywhere}.font-import-button:disabled{opacity:.6;cursor:wait}.preferences-error{padding:8px 16px;background:#fff0cf;color:#6d4900;font-size:12px}.rich-controls input[type=color]{width:32px;height:30px;padding:2px;border:1px solid var(--line);border-radius:6px;cursor:pointer}
+
+.react-flow__node.dragging .mind-node.node-selected{box-shadow:0 0 0 4px #aa99ff50,0 11px 25px #36305a22;filter:none}.react-flow__node .mind-node.node-selected:hover{box-shadow:0 0 0 4px #aa99ff50,0 11px 25px #36305a22}

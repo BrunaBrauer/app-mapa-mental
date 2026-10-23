@@ -82,3 +82,9 @@ As fontes importadas pelo usuário ficam no IndexedDB do navegador. O mapa é si
 - O menu de nó usa coordenadas da tela e rolagem interna, independente do zoom do canvas. Durante o arraste ele fica oculto e volta ao soltar. Nós parados mantêm suas referências e não reiniciam animações a cada movimento.
 
 Teste do importador: `node scripts/test-import.mjs`.
+
+## Preferências da conta
+
+Tema, grade, barra lateral e exibição automática do menu são gravados em `nodum_preferences` nos metadados do usuário autenticado no Supabase. Não são usados para autorização. A última gravação prevalece; outro dispositivo carrega as preferências ao abrir/recarregar o editor. As gravações são serializadas após 350 ms de inatividade e falhas aparecem no editor. No modo local de testes, as preferências ficam no navegador. Fontes personalizadas continuam armazenadas apenas no navegador onde foram importadas.
+
+Teste das rotas com serviços simulados: `node scripts/test-preferences-ai.mjs`. Uma chamada real Gemini exige sessão autenticada e `GEMINI_API_KEY` na Vercel (sem prefixo público); o deploy deve ser refeito após adicionar a variável. O uso pode consumir a cota/crédito do projeto Google.
