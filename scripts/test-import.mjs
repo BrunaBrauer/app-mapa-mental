@@ -31,6 +31,8 @@ assert.throws(() => parseMapFile(JSON.stringify({ ...copy, movementMode: 'inexis
 assert.throws(() => parseMapFile(JSON.stringify({ ...copy, nodes: [{ ...copy.nodes[0], positionLocked: 'sim' }] }), 'invalid-lock.json'));
 const styledBackup = parseMapFile(JSON.stringify({ ...copy, levelStyles: [{ depth: 1, style: { background: '#ffffff' }, autoWidth: true }], nodes: copy.nodes.map(node => ({ ...node, childAlignment: 'center', sizeLocked: false, styleOverrides: ['background'] })) }), 'styled.json').map;
 assert.equal(styledBackup.levelStyles[0].style.background, '#ffffff');
+const sizedBackup = parseMapFile(JSON.stringify({ ...copy, nodes: copy.nodes.map(node => ({ ...node, minWidth: 110, maxWidth: 420, minHeight: 40, maxHeight: 240 })) }), 'sized.json').map;
+assert.equal(sizedBackup.nodes[0].maxWidth, 420);
 assert.equal(styledBackup.nodes[0].childAlignment, 'center');
 assert.throws(() => parseMapFile(JSON.stringify({ ...copy, levelStyles: [{ depth: -1, style: {} }] }), 'invalid-level.json'));
 const jsonMom = parseMapFile(JSON.stringify({ name: 'Mapa', topics: [{ text: 'Centro', subTopics: [{ text: 'Filho' }] }] }), 'mapa.mom');

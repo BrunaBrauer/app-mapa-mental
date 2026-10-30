@@ -319,7 +319,7 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
       return;
     }
     const targets = visualScopeIds(active, ids, operation === 'save-level-style' ? 'level' : scope);
-    const changesSize = ['width','height','both','size-auto','restore-level-size','save-level-style','restore-level-style','model:'].some(part => operation.includes(part)) || operation === 'copy-style' && Boolean(styleGroups?.includes('dimensions'));
+    const changesSize = ['width','height','both','size-auto','restore-level-size','save-level-style','restore-level-style','model:','fixed-size:','limit-'].some(part => operation.includes(part)) || operation === 'copy-style' && Boolean(styleGroups?.includes('dimensions'));
     if (changesSize) {
       const settled = spreadSiblingOverlaps(next, targets, dimensions);
       next = settled.map;
