@@ -102,8 +102,8 @@ export function visualSize(node: MindNode, dimensions?: NodeDimensions): { width
   const measured = dimensions?.get(node.id);
   if (measured) return measured;
   const width = node.width || (node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 205 : node.shape === 'ellipse' ? 175 : !node.parentId && !node.floating ? 182 : 145);
-  const height = node.height || (node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 118 : node.shape === 'ellipse' ? 74 : !node.parentId && !node.floating ? 62 : 50);
-  return { width, height: height + (node.image ? 120 : 0) };
+  const height = node.height ?? ((node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 118 : node.shape === 'ellipse' ? 74 : !node.parentId && !node.floating ? 62 : 50) + (node.image ? 120 : 0));
+  return { width, height };
 }
 
 export function overlappingIds(nodes: MindNode[], movedIds: Set<string>, gap = 12, dimensions?: NodeDimensions): Set<string> {
@@ -176,6 +176,7 @@ export function alignNodes(map: MindMap, selectedIds: string[], command: AlignCo
   if (selected.length < 2 || !movable.length) return map;
   const positions = new Map<string, Point>();
   const sizes = new Map(selected.map(node => [node.id, visualSize(node, dimensions)]));
+  const locked = selected.filter(node => node.positionLocked);
   const left = Math.min(...selected.map(node => node.x));
   const top = Math.min(...selected.map(node => node.y));
   const right = Math.max(...selected.map(node => node.x + sizes.get(node.id)!.width));
@@ -194,14 +195,17 @@ export function alignNodes(map: MindMap, selectedIds: string[], command: AlignCo
       cursor += sizes.get(node.id)![dimension] + Math.max(0, gap);
     }
   } else {
+    const reference = locked[0];
+    const referenceSize = reference && sizes.get(reference.id)!;
+    const coordinate = (node: MindNode) => command === 'left' ? node.x : command === 'right' ? node.x + sizes.get(node.id)!.width : command === 'center-x' ? node.x + sizes.get(node.id)!.width / 2 : command === 'top' ? node.y : command === 'bottom' ? node.y + sizes.get(node.id)!.height : node.y + sizes.get(node.id)!.height / 2;
+    if (locked.length > 1 && locked.some(node => Math.abs(coordinate(node) - coordinate(reference)) > 1)) return map;
     for (const node of movable) {
       const size = sizes.get(node.id)!;
-      const x = command === 'left' ? left : command === 'right' ? right - size.width : command === 'center-x' ? (left + right - size.width) / 2 : node.x;
-      const y = command === 'top' ? top : command === 'bottom' ? bottom - size.height : command === 'center-y' ? (top + bottom - size.height) / 2 : node.y;
+      const x = command === 'left' ? (reference ? reference.x : left) : command === 'right' ? (reference ? reference.x + referenceSize.width : right) - size.width : command === 'center-x' ? (reference ? reference.x + referenceSize.width / 2 : (left + right) / 2) - size.width / 2 : node.x;
+      const y = command === 'top' ? (reference ? reference.y : top) : command === 'bottom' ? (reference ? reference.y + referenceSize.height : bottom) - size.height : command === 'center-y' ? (reference ? reference.y + referenceSize.height / 2 : (top + bottom) / 2) - size.height / 2 : node.y;
       positions.set(node.id, { x, y });
     }
   }
-  const locked = selected.filter(node => node.positionLocked);
   for (const node of movable) {
     const position = positions.get(node.id);
     if (position && locked.some(other => intersects({ ...node, ...position }, other, 12, dimensions) && !intersects(node, other, 12, dimensions))) positions.delete(node.id);

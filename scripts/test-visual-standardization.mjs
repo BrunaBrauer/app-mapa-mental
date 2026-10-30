@@ -1,0 +1,89 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
+
+const compile = async path => ts.transpileModule(await readFile(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const url = code => `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
+const mapsUrl = url(await compile('lib/maps.ts'));
+const movementUrl = url((await compile('lib/movement.ts')).replace("'./maps'", JSON.stringify(mapsUrl)));
+const styleUrl = url(await compile('lib/node-style.ts'));
+const modelUrl = url(await compile('lib/style-models.ts'));
+const visualUrl = url((await compile('lib/visual-standardization.ts')).replace("'./maps'", JSON.stringify(mapsUrl)).replace("'./movement'", JSON.stringify(movementUrl)).replace("'./node-style'", JSON.stringify(styleUrl)).replace("'./style-models'", JSON.stringify(modelUrl)));
+const { autoLayout } = await import(mapsUrl);
+const { applyVisualStandard, applySiblingAlignments, markStyleOverrides, patchVisualNodes, styleNewNodes, spreadSiblingOverlaps, visualScopeIds } = await import(visualUrl);
+
+const nodes = [
+  { id: 'root', parentId: null, text: 'Centro', x: 0, y: 0 },
+  { id: 'a', parentId: 'root', text: 'A', x: 270, y: 0, width: 120 },
+  { id: 'b', parentId: 'root', text: 'B', x: 285, y: 110, width: 180 },
+  { id: 'a1', parentId: 'a', text: 'A1', x: 540, y: 0, width: 100 },
+  { id: 'b1', parentId: 'b', text: 'B1', x: 555, y: 110, width: 210 },
+];
+const map = { id: 'map', title: 'Teste', nodes, layout: 'right', updatedAt: 1 };
+const get = (value, id) => value.nodes.find(node => node.id === id);
+const dims = new Map(nodes.map(node => [node.id, { width: node.width || 182, height: 50 }]));
+assert.deepEqual(visualScopeIds(map, ['a'], 'siblings'), ['a', 'b']);
+assert.deepEqual(visualScopeIds(map, ['a1'], 'level'), ['a1', 'b1']);
+assert.deepEqual(visualScopeIds(map, ['a'], 'branch'), ['a', 'a1']);
+const defaultLayout = autoLayout(nodes, 'right');
+assert.equal(get({ nodes: defaultLayout }, 'a').x, get({ nodes: defaultLayout }, 'b').x, 'Irmãos começam pela mesma borda esquerda.');
+const left = applyVisualStandard(map, ['a'], 'siblings', 'align-left', dims);
+assert.equal(get(left, 'a').x, get(left, 'b').x);
+assert.equal(get(left, 'b').y, 110);
+assert.equal(get(left, 'root').x, 0);
+const center = applyVisualStandard(map, ['a'], 'siblings', 'align-center', dims);
+assert.equal(get(center, 'a').x + 60, get(center, 'b').x + 90);
+assert.equal(get(center, 'root').childAlignment, 'center');
+const right = applyVisualStandard(map, ['a'], 'siblings', 'align-right', dims);
+assert.equal(get(right, 'a').x + 120, get(right, 'b').x + 180);
+const level = applyVisualStandard(map, ['a1'], 'level', 'align-left', dims);
+assert.equal(get(level, 'a1').x, 540, 'Ramos diferentes não são fundidos por nível.');
+assert.equal(get(level, 'b1').x, 555);
+const wider = applyVisualStandard(center, ['a'], 'selection', 'fixed-width', dims, 200);
+assert.equal(get(wider, 'a').x + 100, get(center, 'a').x + 60, 'Largura nova preserva o centro.');
+const directWider = patchVisualNodes(center, ['a'], { width: 200 }, dims);
+assert.equal(get(directWider, 'a').x + 100, get(center, 'a').x + 60, 'Edição numérica preserva o centro.');
+const equal = applyVisualStandard(map, ['a','b'], 'selection', 'uniform-width', dims);
+assert.equal(get(equal, 'a').width, 180);
+assert.equal(get(equal, 'b').width, 180);
+assert.equal(get(applyVisualStandard(equal, ['a','b'], 'selection', 'width-auto', dims), 'a').width, undefined);
+assert.equal(get(applyVisualStandard(map, ['a','b'], 'selection', 'smallest-width', dims), 'b').width, 120);
+const locked = { ...map, nodes: nodes.map(node => node.id === 'a' ? { ...node, sizeLocked: true, positionLocked: true } : node) };
+assert.equal(get(applyVisualStandard(locked, ['a','b'], 'selection', 'fixed-width', dims, 300), 'a').width, 120);
+assert.equal(markStyleOverrides(get(locked, 'a'), { width: 300 }, locked).width, 120);
+const alignedToLocked = applyVisualStandard(locked, ['a'], 'siblings', 'align-left', dims);
+assert.equal(get(alignedToLocked, 'b').x, get(locked, 'a').x);
+
+const levelStyle = applyVisualStandard(map, ['a'], 'selection', 'save-level-style', dims);
+assert.equal(levelStyle.levelStyles[0].depth, 1);
+assert.equal(get(levelStyle, 'b').width, 120);
+const newChild = { id: 'c', parentId: 'root', text: 'C', x: 280, y: 220 };
+assert.equal(get(styleNewNodes(levelStyle, { ...levelStyle, nodes: [...levelStyle.nodes, newChild] }), 'c').width, 120);
+const customized = { ...levelStyle, nodes: levelStyle.nodes.map(node => node.id === 'b' ? markStyleOverrides(node, { background: '#ff0000' }, levelStyle) : node) };
+const sourceChanged = { ...customized, nodes: customized.nodes.map(node => node.id === 'a' ? { ...node, background: '#00ff00', width: 150 } : node) };
+const refreshed = applyVisualStandard(sourceChanged, ['a'], 'selection', 'save-level-style', dims);
+assert.equal(get(refreshed, 'b').background, '#ff0000', 'Personalização individual resiste à atualização do nível.');
+assert.equal(get(refreshed, 'b').width, 150, 'Propriedade herdada acompanha a atualização.');
+const restored = applyVisualStandard(refreshed, ['b'], 'selection', 'restore-level-style', dims);
+assert.equal(get(restored, 'b').background, '#00ff00');
+const selective = applyVisualStandard(map, ['a'], 'siblings', 'copy-style', dims, undefined, ['dimensions']);
+assert.equal(get(selective, 'b').width, 120);
+assert.equal(get(selective, 'b').background, undefined);
+const modelled = applyVisualStandard(map, ['a'], 'map', 'model:academic', dims);
+assert.equal(get(modelled, 'root').fontFamily, 'Georgia, serif');
+assert.equal(get(modelled, 'b').width, undefined);
+assert.equal(get(styleNewNodes(modelled, { ...modelled, nodes: [...modelled.nodes, newChild] }), 'c').fontFamily, 'Georgia, serif');
+const deep = { id: 'deep', parentId: 'a1', text: 'Profundo', x: 800, y: 0 };
+assert.equal(get(styleNewNodes(modelled, { ...modelled, nodes: [...modelled.nodes, deep] }), 'deep').fontFamily, 'Georgia, serif');
+const withAlignment = applySiblingAlignments({ ...center, nodes: [...center.nodes, newChild] });
+assert.equal(get(withAlignment, 'a').x + 60, get(withAlignment, 'c').x + 72.5);
+const tall = { ...map, nodes: map.nodes.map(node => node.id === 'a' ? { ...node, height: 160 } : node) };
+const spaced = spreadSiblingOverlaps(tall, ['a'], dims);
+assert.ok(get(spaced.map, 'b').y >= 172);
+assert.equal(get(spaced.map, 'b1').y - get(tall, 'b1').y, get(spaced.map, 'b').y - get(tall, 'b').y);
+assert.deepEqual(map.nodes.map(node => node.parentId), spaced.map.nodes.map(node => node.parentId));
+const largeMap = { ...map, nodes: [nodes[0], ...Array.from({ length: 150 }, (_, index) => ({ id: `many-${index}`, parentId: 'root', text: `Ideia ${index}`, x: 260, y: index * 88 }))] };
+const start = performance.now();
+assert.equal(applyVisualStandard(largeMap, ['many-0'], 'siblings', 'uniform-width').nodes.length, 151);
+assert.ok(performance.now() - start < 1200, 'Padronizar 150 irmãos deve permanecer responsivo.');
+console.log('Padrão visual: alinhamento, escopos, dimensões, bloqueios, estilo por nível e herança OK.');

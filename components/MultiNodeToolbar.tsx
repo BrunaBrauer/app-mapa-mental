@@ -3,10 +3,13 @@ import { useState } from 'react';
 import { AlignCenter, AlignLeft, AlignRight, Box, GitBranch, Move, Trash2, Type, X } from 'lucide-react';
 import type { ImportedFont } from '../lib/fonts';
 import type { AlignCommand } from '../lib/movement';
-import type { MindNode } from '../types';
+import type { MindMap, MindNode } from '../types';
+import type { VisualOperation, VisualScope, VisualStyleGroup } from '../lib/visual-standardization';
 import { QuickLinePanel, QuickNodePanel, QuickTextPanel } from './QuickStylePanels';
+import VisualStandardsPanel from './VisualStandardsPanel';
 
 type Props = {
+  map: MindMap;
   nodes: MindNode[];
   fonts: ImportedFont[];
   favoriteIcons: string[];
@@ -14,11 +17,12 @@ type Props = {
   onImportFont: (file: File) => Promise<void>;
   onFavoriteIcons: (icons: string[]) => void;
   onAlign: (command: AlignCommand) => void;
+  onVisual: (scope: VisualScope, operation: VisualOperation, value?: number, styleGroups?: VisualStyleGroup[]) => void;
   onDelete: () => void;
   onClear: () => void;
 };
 
-export default function MultiNodeToolbar({ nodes, fonts, favoriteIcons, onPatch, onImportFont, onFavoriteIcons, onAlign, onDelete, onClear }: Props) {
+export default function MultiNodeToolbar({ map, nodes, fonts, favoriteIcons, onPatch, onImportFont, onFavoriteIcons, onAlign, onVisual, onDelete, onClear }: Props) {
   const [panel, setPanel] = useState<'text' | 'node' | 'line' | 'arrange' | null>(null);
   const exemplar = nodes.at(-1)!;
   const lineExemplar = nodes.find(node => node.parentId);
@@ -36,11 +40,11 @@ export default function MultiNodeToolbar({ nodes, fonts, favoriteIcons, onPatch,
       {panel === 'text' && <QuickTextPanel node={exemplar} fonts={fonts} favorites={favoriteIcons} onPatch={onPatch} onImportFont={onImportFont} onFavorites={onFavoriteIcons} batch/>}
       {panel === 'node' && <QuickNodePanel node={exemplar} onPatch={onPatch} batch/>}
       {panel === 'line' && lineExemplar && <QuickLinePanel node={lineExemplar} onPatch={onPatch} batch/>}
-      {panel === 'arrange' && <div className="multi-arrange"><strong>Alinhar e distribuir</strong><p>Nós bloqueados ficam no lugar. Cada comando pode ser desfeito.</p>{([
+      {panel === 'arrange' && <><div className="multi-arrange"><strong>Alinhar e distribuir</strong><p>Nós bloqueados ficam no lugar. Cada comando pode ser desfeito.</p>{([
         ['left','Alinhar à esquerda'],['center-x','Centro horizontal'],['right','Alinhar à direita'],
         ['top','Alinhar ao topo'],['center-y','Centro vertical'],['bottom','Alinhar à base'],
         ['distribute-x','Distribuir horizontalmente'],['distribute-y','Distribuir verticalmente'],['uniform','Espaçamento uniforme'],
-      ] as [AlignCommand,string][]).map(([command,label]) => <button key={command} onClick={() => onAlign(command)}>{label}</button>)}</div>}
+      ] as [AlignCommand,string][]).map(([command,label]) => <button key={command} onClick={() => onAlign(command)}>{label}</button>)}</div><div className="quick-section-divider"/><VisualStandardsPanel map={map} selectedIds={nodes.map(node => node.id)} multiple reference={exemplar.text} onApply={onVisual}/></>}
     </div>}
   </div>;
 }

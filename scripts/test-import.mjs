@@ -29,6 +29,10 @@ assert.throws(() => parseMapFile(JSON.stringify({ ...copy, nodes: [{ ...copy.nod
 assert.throws(() => parseMapFile(JSON.stringify({ ...copy, nodes: [copy.nodes[0], copy.nodes[0]] }), 'duplicate.json'));
 assert.throws(() => parseMapFile(JSON.stringify({ ...copy, movementMode: 'inexistente' }), 'invalid-movement.json'));
 assert.throws(() => parseMapFile(JSON.stringify({ ...copy, nodes: [{ ...copy.nodes[0], positionLocked: 'sim' }] }), 'invalid-lock.json'));
+const styledBackup = parseMapFile(JSON.stringify({ ...copy, levelStyles: [{ depth: 1, style: { background: '#ffffff' }, autoWidth: true }], nodes: copy.nodes.map(node => ({ ...node, childAlignment: 'center', sizeLocked: false, styleOverrides: ['background'] })) }), 'styled.json').map;
+assert.equal(styledBackup.levelStyles[0].style.background, '#ffffff');
+assert.equal(styledBackup.nodes[0].childAlignment, 'center');
+assert.throws(() => parseMapFile(JSON.stringify({ ...copy, levelStyles: [{ depth: -1, style: {} }] }), 'invalid-level.json'));
 const jsonMom = parseMapFile(JSON.stringify({ name: 'Mapa', topics: [{ text: 'Centro', subTopics: [{ text: 'Filho' }] }] }), 'mapa.mom');
 assert.equal(jsonMom.map.nodes.length, 2);
 const archive = zipSync({ 'document.json': strToU8(JSON.stringify({ mapInfo: { rootId: 'root', name: 'Exemplo' } })), 'nodes.json': strToU8(JSON.stringify([{ id: 'root', title: 'Centro' }, { id: 'child', parentId: 'root', title: 'Filho' }, { id: 'gone', parentId: 'root', title: 'Excluído', deleted: true }])) });
