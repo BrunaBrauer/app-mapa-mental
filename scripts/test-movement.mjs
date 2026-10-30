@@ -6,7 +6,7 @@ const compile = async path => ts.transpileModule(await readFile(path, 'utf8'), {
 const url = code => `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
 const movementUrl = url((await compile('lib/movement.ts')).replace("'./maps'", JSON.stringify(url(await compile('lib/maps.ts')))));
 const movement = await import(movementUrl);
-const { effectiveMovementMode, movementModes, childMovementSettings, projectDrag, reorganizeBranch, alignNodes, snapMoveAwayFromOverlap, overlappingIds } = movement;
+const { effectiveMovementMode, movementModes, childMovementSettings, projectDrag, reorderAlignedSibling, reorganizeBranch, alignNodes, snapMoveAwayFromOverlap, overlappingIds } = movement;
 const { alignedHandles } = await import(url((await compile('lib/edge-geometry.ts')).replace("'./movement'", JSON.stringify(movementUrl))));
 const nodes = [
   { id: 'root', parentId: null, text: 'Centro', x: 0, y: 0 },
@@ -34,6 +34,16 @@ assert.equal(projectDrag(map, requested, 'automatic').automaticRoots[0], 'branch
 const locked = { ...map, nodes: nodes.map(node => node.id === 'leaf' ? { ...node, positionLocked: true } : node) };
 assert.equal(projectDrag(locked, requested, 'hierarchical').positions.size, 0);
 assert.match(projectDrag(locked, requested, 'hierarchical').blocked, /bloqueada/);
+
+const droppedFirst = { ...map, siblingReorder: true, nodes: nodes.map(node => node.id === 'other' ? { ...node, y: -200 } : node) };
+const reordered = reorderAlignedSibling(droppedFirst, 'other');
+assert.equal(reordered.reordered, true);
+assert.equal(reordered.parentId, 'root');
+assert.deepEqual(reordered.map.nodes.filter(node => node.parentId === 'root').map(node => node.id), ['other', 'branch']);
+assert.equal(reordered.map.nodes.find(node => node.id === 'other').text, 'Outro');
+assert.equal(reorderAlignedSibling({ ...map, nodes: nodes.map(node => node.id === 'branch' ? { ...node, positionLocked: true } : node) }, 'other').blocked, true);
+const unchangedOrder = reorderAlignedSibling(map, 'branch');
+assert.equal(unchangedOrder.reordered, false);
 
 const messy = { ...map, nodes: nodes.map(node => node.id === 'leaf' ? { ...node, x: 700, y: 400 } : node) };
 const organized = reorganizeBranch(messy, 'branch', false);

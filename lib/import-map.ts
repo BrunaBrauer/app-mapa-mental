@@ -5,6 +5,8 @@ import { autoLayout, uid } from './maps';
 import { validMap } from './server-maps';
 
 type RecordValue = Record<string, unknown>;
+const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
+const MAX_ARCHIVE_ENTRIES = 1000;
 const record = (value: unknown): RecordValue => value && typeof value === 'object' && !Array.isArray(value) ? value as RecordValue : {};
 const array = (value: unknown): unknown[] => value == null ? [] : Array.isArray(value) ? value : [value];
 const text = (value: unknown): string => typeof value === 'string' ? value : typeof value === 'number' ? String(value) : textValue(record(value)['#text']);
@@ -25,8 +27,7 @@ export function parseMapFile(source: string, filename: string): { map: MindMap; 
   }
   if (Array.isArray(raw.nodes)) {
     const candidate = { ...raw, id: uid(), shareToken: null, updatedAt: Date.now() };
-    if (!validMap(candidate) || !candidate.nodes.length) throw new Error('O mapa JSON contém dados inválidos (limite de 2.000 nós e 1.000 caracteres por nó).');
-    validateTree(candidate.nodes);
+    if (!validMap(candidate)) throw new Error('O mapa JSON contém dados inválidos (limite de 2.000 nós, 100 níveis e 1.000 caracteres por nó).');
     return { map: candidate };
   }
   const root = record(raw.map || raw);
@@ -63,10 +64,19 @@ export function parseMapFile(source: string, filename: string): { map: MindMap; 
 }
 
 export function parseMindomoArchive(bytes: Uint8Array, filename: string, nesting = 0): { map: MindMap; warning?: string } {
-  if (bytes.length > 25 * 1024 * 1024 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new Error('O arquivo não é um pacote Mindomo válido de até 25 MB.');
+  if (bytes.length > MAX_ARCHIVE_BYTES || bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new Error('O arquivo não é um pacote Mindomo válido de até 25 MB.');
   let files: Record<string, Uint8Array>;
+  let entryCount = 0;
+  let extractedBytes = 0;
   // .pmom may place the same map files in a directory or wrap a .mom with attachments.
-  try { files = unzipSync(bytes, { filter: entry => /(^|\/)(document|nodes)\.json$/i.test(entry.name) ? entry.originalSize <= 10 * 1024 * 1024 : nesting === 0 && /\.mom$/i.test(entry.name) && entry.originalSize <= 25 * 1024 * 1024 }); }
+  try { files = unzipSync(bytes, { filter: entry => {
+    if (++entryCount > MAX_ARCHIVE_ENTRIES) throw new Error('entries');
+    const limit = /(^|\/)(document|nodes)\.json$/i.test(entry.name) ? 10 * 1024 * 1024 : nesting === 0 && /\.mom$/i.test(entry.name) ? MAX_ARCHIVE_BYTES : 0;
+    if (!limit || entry.originalSize > limit) return false;
+    extractedBytes += entry.originalSize;
+    if (extractedBytes > MAX_ARCHIVE_BYTES) throw new Error('size');
+    return true;
+  } }); }
   catch { throw new Error('Não foi possível abrir o pacote Mindomo.'); }
   const documentName = Object.keys(files).find(name => /(^|\/)document\.json$/i.test(name));
   const folder = documentName?.slice(0, -'document.json'.length);
@@ -179,17 +189,4 @@ function isDescendant(node: MindNode, ancestor: string, nodes: MindNode[]): bool
   let parent = node.parentId;
   while (parent) { if (parent === ancestor) return true; parent = nodes.find(item => item.id === parent)?.parentId ?? null; }
   return false;
-}
-
-function validateTree(nodes: MindNode[]) {
-  const byId = new Map(nodes.map(node => [node.id, node]));
-  if (byId.size !== nodes.length) throw new Error('O mapa contém identificadores de nós duplicados.');
-  for (const node of nodes) {
-    const seen = new Set([node.id]);
-    let parent = node.parentId;
-    while (parent) {
-      if (seen.has(parent) || !byId.has(parent)) throw new Error('A hierarquia do mapa contém um ciclo ou um pai inexistente.');
-      seen.add(parent); parent = byId.get(parent)!.parentId;
-    }
-  }
 }

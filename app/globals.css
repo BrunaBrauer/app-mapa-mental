@@ -255,3 +255,6 @@ body {
 
 .login-links{display:flex;flex-wrap:wrap;gap:8px 17px;margin-top:15px}.login-links button{border:0;background:none;color:#6952dc;font:inherit;font-size:12px;font-weight:700;cursor:pointer;padding:2px 0}.ai-status{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:100;padding:12px 18px;display:flex;align-items:center;gap:9px;border-radius:12px;background:#24243b;color:#fff;box-shadow:0 12px 35px #0003}.ai-modal{max-width:540px}.ai-modal textarea,.ai-items input{width:100%;box-sizing:border-box;border:1px solid #dcdde8;border-radius:9px;padding:10px 12px;background:#fff;color:#24243b;font:inherit}.ai-items{display:grid;gap:8px;margin:18px 0}.ai-modal textarea{margin:14px 0;resize:vertical}.ai-modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:16px}
 .drive-setup{max-width:220px;margin:5px 10px 9px;color:#74758c;font-size:12px;line-height:1.4}.dropdown-menu button:disabled{opacity:.45;cursor:not-allowed}
+
+/* Keep pointer and text insertion feedback visible across React Flow drag states. */
+.react-flow__node.draggable .mind-node{cursor:grab}.react-flow__node.draggable.dragging .mind-node{cursor:grabbing}.rich-editable,.rich-editable *{cursor:text!important;caret-color:var(--accent);user-select:text}

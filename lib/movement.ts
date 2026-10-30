@@ -88,6 +88,43 @@ export function projectDrag(map: MindMap, requested: Map<string, Point>, globalM
   return { positions, automaticRoots };
 }
 
+export function reorderAlignedSibling(map: MindMap, id: string, dimensions?: NodeDimensions): { map: MindMap; parentId: string | null; reordered: boolean; blocked: boolean } {
+  const dragged = map.nodes.find(node => node.id === id);
+  if (!dragged?.parentId) return { map, parentId: null, reordered: false, blocked: false };
+  const parent = map.nodes.find(node => node.id === dragged.parentId);
+  if (!parent) return { map, parentId: null, reordered: false, blocked: false };
+  const siblings = map.nodes.filter(node => node.parentId === parent.id);
+  if (siblings.length < 2) return { map, parentId: parent.id, reordered: false, blocked: false };
+  const mode = parent.branchLayout || (map.layout === 'free' ? 'right' : map.layout);
+  const alternating = !parent.parentId && ['balanced', 'split-down', 'fishbone', 'fishbone-left', 'timeline', 'timeline-left'].includes(mode);
+  const draggedIndex = siblings.findIndex(node => node.id === id);
+  const group = alternating ? siblings.filter((_, index) => index % 2 === draggedIndex % 2) : siblings;
+  if (group.some(node => node.positionLocked)) return { map, parentId: parent.id, reordered: false, blocked: true };
+  if (group.length < 2) return { map, parentId: parent.id, reordered: false, blocked: false };
+  const size = (node: MindNode) => visualSize(node, dimensions);
+  const center = (node: MindNode) => ({ x: node.x + size(node).width / 2, y: node.y + size(node).height / 2 });
+  const parentCenter = center(parent);
+  const rank = (node: MindNode) => {
+    const point = center(node);
+    if (mode === 'radial') return Math.atan2(point.y - parentCenter.y, point.x - parentCenter.x);
+    if (!parent.parentId && ['split-down', 'fishbone', 'fishbone-left', 'timeline', 'timeline-left'].includes(mode)) return Math.abs(point.x - parentCenter.x);
+    return ['down', 'up', 'org'].includes(mode) ? point.x : point.y;
+  };
+  const others = group.filter(node => node.id !== id).sort((a, b) => rank(a) - rank(b));
+  const target = rank(dragged);
+  const insertion = others.findIndex(node => target < rank(node));
+  const ordered = [...others];
+  ordered.splice(insertion < 0 ? ordered.length : insertion, 0, dragged);
+  const groupIds = new Set(group.map(node => node.id));
+  const slots = map.nodes.map((node, index) => groupIds.has(node.id) ? index : -1).filter(index => index >= 0);
+  const current = slots.map(index => map.nodes[index].id);
+  const reordered = ordered.some((node, index) => node.id !== current[index]);
+  if (!reordered) return { map, parentId: parent.id, reordered: false, blocked: false };
+  const nodes = [...map.nodes];
+  slots.forEach((slot, index) => { nodes[slot] = ordered[index]; });
+  return { map: { ...map, nodes }, parentId: parent.id, reordered: true, blocked: false };
+}
+
 export function collectNodeDimensions(): NodeDimensions {
   const dimensions: NodeDimensions = new Map();
   if (typeof document === 'undefined') return dimensions;

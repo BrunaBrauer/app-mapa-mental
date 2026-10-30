@@ -23,6 +23,8 @@ export default function MovementSettings({ map, globalMode, globalAvoidOverlap, 
       <label>Modo deste mapa<select value={map.movementMode || 'inherit'} onChange={event => onMapPatch({ movementMode: event.target.value === 'inherit' ? undefined : event.target.value as MovementMode })}><option value="inherit">Usar padrão da conta</option>{Object.entries(movementLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label className="movement-check"><input type="checkbox" checked={globalAvoidOverlap} onChange={event => onGlobalAvoidOverlap(event.target.checked)}/> Evitar sobreposição por padrão</label>
       <label className="movement-check"><input type="checkbox" checked={map.avoidOverlap ?? globalAvoidOverlap} onChange={event => onMapPatch({ avoidOverlap: event.target.checked })}/> Evitar sobreposição neste mapa</label>
+      <label className="movement-check"><input type="checkbox" checked={Boolean(map.siblingReorder)} onChange={event => onMapPatch({ siblingReorder: event.target.checked })}/> Reordenar subnós mantendo alinhamento</label>
+      <small>Quando a reordenação está ligada, arraste um subnó entre seus irmãos para trocar a ordem sem alterar tamanhos ou estilos. Desligue para voltar ao posicionamento livre.</small>
       <small>O modo hierárquico move o nó e seus descendentes como um conjunto. Nós bloqueados impedem o arraste do ramo.</small>
     </div>}
   </div>;

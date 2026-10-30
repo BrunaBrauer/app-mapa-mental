@@ -5,11 +5,13 @@ import ts from 'typescript';
 
 const compile = async path => ts.transpileModule(await readFile(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const url = code => `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
+const serverMaps = url(await compile('lib/server-maps.ts'));
 const source = (await compile('lib/import-map.ts'))
   .replace("'./maps'", JSON.stringify(url(await compile('lib/maps.ts'))))
-  .replace("'./server-maps'", JSON.stringify(url(await compile('lib/server-maps.ts'))))
+  .replace("'./server-maps'", JSON.stringify(serverMaps))
   .replace("'fast-xml-parser'", JSON.stringify(import.meta.resolve('fast-xml-parser')));
 const { parseMapFile, parseMindomoArchive } = await import(url(source.replace("'fflate'", JSON.stringify(import.meta.resolve('fflate')))));
+const { validMap } = await import(serverMaps);
 const xml = `<?xml version="1.0"?><map xmlns="http://schemas.mindomo.com/application/version-3.6"><name>Planejamento</name><topics><topic><text>Raiz &amp; ação</text><subTopics><topic><text>Filho</text><notes>Uma nota</notes><hyperlink>https://example.com</hyperlink></topic><topic deleted="true"><text>Removido</text></topic></subTopics></topic></topics></map>`;
 const result = parseMapFile(xml, 'teste.mom');
 assert.equal(result.map.title, 'Planejamento');
@@ -35,6 +37,44 @@ const sizedBackup = parseMapFile(JSON.stringify({ ...copy, nodes: copy.nodes.map
 assert.equal(sizedBackup.nodes[0].maxWidth, 420);
 assert.equal(styledBackup.nodes[0].childAlignment, 'center');
 assert.throws(() => parseMapFile(JSON.stringify({ ...copy, levelStyles: [{ depth: -1, style: {} }] }), 'invalid-level.json'));
+assert.equal(validMap(copy), true);
+assert.equal(validMap({ ...copy, nodes: [] }), false);
+assert.equal(validMap({ ...copy, nodes: [copy.nodes[0], { ...copy.nodes[0], id: crypto.randomUUID() }] }), false, 'Only one central root is allowed');
+assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], parentId: 'missing' }] }), false);
+assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], floating: true, parentId: copy.nodes[1].id }] }), false);
+assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], richText: [{ text: { invalid: true } }] }] }), false);
+assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], richText: [{ text: 'x'.repeat(1001) }] }] }), false);
+assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], comments: [{ id: 'comment', text: 123, createdAt: Date.now() }] }] }), false);
+assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], task: { done: false, progress: 101 } }] }), false);
+assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], url: 'javascript:alert(1)' }] }), false);
+assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], mediaUrl: 'data:text/html,unsafe' }] }), false);
+assert.equal(validMap({ ...copy, siblingReorder: 'yes' }), false);
+assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], url: '', image: '', mediaUrl: '' }] }), true, 'Clearing optional URL fields remains saveable');
+assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], url: 'nodumapp.site' }] }), true, 'Existing scheme-less links remain saveable');
+assert.equal(validMap({ ...copy, relationships: 'invalid' }), false);
+assert.equal(validMap({ ...copy, relationships: [{ id: 'link', source: copy.nodes[0].id, target: 'missing' }] }), false);
+assert.equal(validMap({ ...copy, relationships: [{ id: 'link', source: copy.nodes[0].id, target: copy.nodes[0].id }] }), false);
+assert.equal(validMap({ ...copy, stylePresets: [{ id: 'preset', name: 'Inválido', style: { width: 20 } }] }), false);
+assert.equal(validMap({ ...copy, levelReferences: [{ parentId: 'missing', mode: 'both', style: {} }] }), false);
+assert.equal(validMap({ ...copy, levelConnections: [{ parentId: 'missing', style: {} }] }), false);
+const deepNodes = [{ ...copy.nodes[0], id: 'depth-0' }];
+for (let depth = 1; depth <= 101; depth++) deepNodes.push({ ...copy.nodes[0], id: `depth-${depth}`, parentId: `depth-${depth - 1}` });
+assert.equal(validMap({ ...copy, nodes: deepNodes }), false, 'Hierarchy depth is limited to 100');
+const fullMap = {
+  ...copy, siblingReorder: true,
+  favoriteIcons: ['✦'], spacing: { x: 260, y: 112 }, movementMode: 'hierarchical', avoidOverlap: true,
+  defaultNodeStyle: { background: '#ffffff', width: 145, wrapText: true },
+  stylePresets: [{ id: 'preset', name: 'Modelo', style: { color: '#20243b' } }],
+  levelReferences: [{ parentId: copy.nodes[0].id, mode: 'both', style: { fontSize: 14 } }],
+  levelStyles: [{ depth: 1, style: { border: '#000000' }, autoWidth: true, repeatAfter: true }],
+  levelConnections: [{ parentId: copy.nodes[0].id, style: { color: '#7057e8', width: 2, end: 'arrow' } }],
+  relationships: [{ id: 'relation', source: copy.nodes[0].id, target: copy.nodes[1].id, label: 'liga', style: { pattern: 'dashed' } }],
+  nodes: copy.nodes.map((node, index) => index ? { ...node, url: 'https://example.com', mediaUrl: 'https://example.com/audio', mediaType: 'audio', comments: [{ id: 'comment', text: 'Texto', createdAt: Date.now() }], task: { done: false, progress: 50, due: '2026-10-30' }, richText: [{ text: node.text, bold: true, highlight: '#fff0a8' }] } : node),
+};
+assert.equal(validMap(fullMap), true, 'All supported nested fields remain valid');
+const largeMap = { ...copy, nodes: Array.from({ length: 270 }, (_, index) => ({ ...copy.nodes[0], id: `large-${index}`, parentId: index ? 'large-0' : null, note: 'x'.repeat(100_000) })) };
+assert.ok(new TextEncoder().encode(JSON.stringify(largeMap)).length > 25 * 1024 * 1024);
+assert.equal(validMap(largeMap), true, 'Persisted maps may exceed 25 MB');
 const jsonMom = parseMapFile(JSON.stringify({ name: 'Mapa', topics: [{ text: 'Centro', subTopics: [{ text: 'Filho' }] }] }), 'mapa.mom');
 assert.equal(jsonMom.map.nodes.length, 2);
 const archive = zipSync({ 'document.json': strToU8(JSON.stringify({ mapInfo: { rootId: 'root', name: 'Exemplo' } })), 'nodes.json': strToU8(JSON.stringify([{ id: 'root', title: 'Centro' }, { id: 'child', parentId: 'root', title: 'Filho' }, { id: 'gone', parentId: 'root', title: 'Excluído', deleted: true }])) });
@@ -45,6 +85,10 @@ const packaged = zipSync({ 'maps/exemplo.mom': archive, 'attachments/image.png':
 assert.equal(parseMindomoArchive(packaged, 'exemplo.pmom').map.nodes.length, 2);
 const folderPackage = zipSync({ 'map/document.json': strToU8(JSON.stringify({ mapInfo: { rootId: 'root', name: 'Exemplo' } })), 'map/nodes.json': strToU8(JSON.stringify([{ id: 'root', title: 'Centro' }, { id: 'child', parentId: 'root', title: 'Filho' }])) });
 assert.equal(parseMindomoArchive(folderPackage, 'exemplo.pmom').map.nodes.length, 2);
+const tooManyEntries = Object.fromEntries(Array.from({ length: 1001 }, (_, index) => [`attachments/${index}.txt`, new Uint8Array()]));
+assert.throws(() => parseMindomoArchive(zipSync({ ...tooManyEntries, 'document.json': strToU8('{}'), 'nodes.json': strToU8('[]') }), 'muitas-entradas.mom'));
+const nineMb = new Uint8Array(9 * 1024 * 1024);
+assert.throws(() => parseMindomoArchive(zipSync({ 'a/document.json': nineMb, 'a/nodes.json': nineMb, 'b/document.json': nineMb }), 'expandido.mom'), /Não foi possível abrir/);
 const disconnected = zipSync({ 'document.json': strToU8(JSON.stringify({ mapInfo: { rootId: 'root', name: 'Exemplo' } })), 'nodes.json': strToU8(JSON.stringify([{ id: 'root', title: 'Mind Map' }, { id: 'branch', parentId: 'missing', title: 'Ramo' }, { id: 'leaf', parentId: 'branch', title: 'Folha' }])) });
 const recovered = parseMindomoArchive(disconnected, 'desconectado.mom');
 assert.equal(recovered.map.nodes.length, 3);
