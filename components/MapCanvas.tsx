@@ -7,7 +7,8 @@ import StyledEdge from './StyledEdge';
 import type { NodeAction, NodePanel } from './NodeQuickToolbar';
 import type { LineStyle, MindMap, MindNode } from '../types';
 import { descendants, visibleNodes } from '../lib/maps';
-import { collectNodeDimensions, effectiveAvoidOverlap, effectiveMovementMode, movementModes, overlappingIds, projectDrag, reorganizeBranch } from '../lib/movement';
+import { collectNodeDimensions, effectiveAvoidOverlap, movementModes, projectDrag, reorganizeBranch, snapMoveAwayFromOverlap } from '../lib/movement';
+import { alignedHandles } from '../lib/edge-geometry';
 import type { MovementMode } from '../types';
 
 type Props = { map: MindMap; selectedId: string | null; selectedIds?: string[]; globalMovementMode?: MovementMode; globalAvoidOverlap?: boolean; temporaryBranchId?: string | null; onTemporaryBranchDone?: () => void; onMoveNotice?: (message: string) => void; onSelect: (id: string | null) => void; onSelectMany?: (ids: string[]) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: NodePanel; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
@@ -36,14 +37,12 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     const position = livePositions.get(node.id);
     return position ? { ...node, position: { x: position.x, y: position.y }, dragging: position.dragging && position.source, data: { ...node.data, dragParticipant: position.dragging && !position.source } } : node;
   }), [baseNodes, livePositions]);
-  const edges = useMemo(() => { const byId = new Map(visible.map(node => [node.id, node])); const tree = visible.filter(n => n.parentId && byId.has(n.parentId)).map(n => {
-    const parent = byId.get(n.parentId!)!; const dx = n.x - parent.x; const dy = n.y - parent.y;
-    const vertical = Math.abs(dy) > Math.abs(dx) * 1.1;
-    const sourceHandle = vertical ? (dy < 0 ? 'source-top' : 'source-bottom') : (dx < 0 ? 'source-left' : 'source-right');
-    const targetHandle = vertical ? (dy < 0 ? 'source-bottom' : 'source-top') : (dx < 0 ? 'source-right' : 'source-left');
+  const edges = useMemo(() => { const byId = new Map(visible.map(node => { const live = livePositions.get(node.id); return [node.id, live ? { ...node, x: live.x, y: live.y } : node] as const; })); const tree = visible.filter(n => n.parentId && byId.has(n.parentId)).map(n => {
+    const parent = byId.get(n.parentId!)!; const target = byId.get(n.id)!;
+    const { sourceHandle, targetHandle } = alignedHandles(parent, target);
     const line = n.connectionStyle; const color = line?.color || '#b9b4db';
     return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', data: { line: { ...line, color } }, animated: false, style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) };
-  }); const relationships = (map.relationships || []).filter(link => byId.has(link.source) && byId.has(link.target)).map(link => { const line = link.style; const color = line?.color || '#41baa3'; const source = byId.get(link.source)!; const target = byId.get(link.target)!; const dx = target.x - source.x; const dy = target.y - source.y; const vertical = Math.abs(dy) > Math.abs(dx); const sourceHandle = link.sourceHandle || (vertical ? (dy < 0 ? 'source-top' : 'source-bottom') : (dx < 0 ? 'source-left' : 'source-right')); const targetHandle = link.targetHandle || (vertical ? (dy < 0 ? 'source-bottom' : 'source-top') : (dx < 0 ? 'source-right' : 'source-left')); return { id: link.id, source: link.source, target: link.target, sourceHandle, targetHandle, type: 'styled', data: { line: { pattern: 'dashed' as const, ...line, color } }, label: link.label, style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) ?? '6 4' }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) }; }); return [...tree, ...relationships]; }, [visible, map.relationships]);
+  }); const relationships = (map.relationships || []).filter(link => byId.has(link.source) && byId.has(link.target)).map(link => { const line = link.style; const color = line?.color || '#41baa3'; const source = byId.get(link.source)!; const target = byId.get(link.target)!; const aligned = alignedHandles(source, target); const sourceHandle = link.sourceHandle || aligned.sourceHandle; const targetHandle = link.targetHandle || aligned.targetHandle; return { id: link.id, source: link.source, target: link.target, sourceHandle, targetHandle, type: 'styled', data: { line: { pattern: 'dashed' as const, ...line, color } }, label: link.label, style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) ?? '6 4' }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) }; }); return [...tree, ...relationships]; }, [visible, map.relationships, livePositions]);
   const annotations = useMemo(() => visible.filter(n => n.boundary || n.summary).map(node => {
     const branchIds = descendants(map.nodes, node.id); const branch = visible.filter(item => branchIds.has(item.id));
     const x = Math.min(...branch.map(item => item.x)) - 28; const y = Math.min(...branch.map(item => item.y)) - 28;
@@ -95,10 +94,16 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
       const changed = next.nodes.some((node, index) => node.x !== map.nodes[index].x || node.y !== map.nodes[index].y);
       if (changed) {
         const dimensions = collectNodeDimensions();
-        const risk = projected.automaticRoots.length === 0 && [...requested.keys()].some(id => effectiveMovementMode(map, id, globalMovementMode) === 'hierarchical' && effectiveAvoidOverlap(map, id, globalAvoidOverlap)) && overlappingIds(next.nodes, new Set(projected.positions.keys()), 12, dimensions).size > 0;
         for (const id of projected.automaticRoots) next = reorganizeBranch(next, id, effectiveAvoidOverlap(next, id, globalAvoidOverlap), dimensions);
-        onChange(next);
-        if (risk) onMoveNotice?.('Possível sobreposição após o arraste. Use “Reorganizar ramo” para ajustar o espaçamento.');
+        const movedIds = new Set(projected.positions.keys());
+        const collisionPrevention = [...requested.keys()].some(id => effectiveAvoidOverlap(map, id, globalAvoidOverlap));
+        const landing = collisionPrevention ? snapMoveAwayFromOverlap(next, movedIds, dimensions) : { map: next, adjusted: false, blocked: false };
+        if (landing.blocked) { onMoveNotice?.('Não há espaço livre próximo para este ramo. A posição anterior foi mantida.'); }
+        else {
+          next = landing.map;
+          if (landing.adjusted) onMoveNotice?.('O ramo foi deslocado até uma posição livre para evitar sobreposição.');
+          onChange(next);
+        }
       }
     }
     if (temporaryBranchId && requested.has(temporaryBranchId)) onTemporaryBranchDone?.();

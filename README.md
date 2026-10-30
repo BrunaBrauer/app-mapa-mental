@@ -88,7 +88,7 @@ Teste do importador: `node scripts/test-import.mjs`.
 
 O padrão é **Hierárquico**: ao arrastar um nó, todos os seus descendentes acompanham o movimento sem alterar a hierarquia nem o layout escolhido. No controle **Movimentação**, na barra inferior, configure o padrão da conta e uma exceção para o mapa. No menu do nó, em **Movimentação e organização** (também acessível com clique direito), escolha uma exceção individual, bloqueie a posição ou use **Mover ramo inteiro** para o próximo arraste (`Alt+Shift+M`). **Reorganizar ramo** ajusta apenas o ramo selecionado; **Restaurar posicionamento automático** remove o layout próprio do ramo. Um nó bloqueado impede o arraste completo do ramo, com aviso na tela.
 
-Ao selecionar vários nós, o botão **Organizar** oferece alinhamento nas seis direções e distribuição horizontal, vertical ou uniforme. Nós bloqueados ficam imóveis. O modo **Automático** reorganiza o ramo após soltar; a opção de evitar sobreposição pode ser configurada na conta, no mapa e no nó. O modo **Individual** não reorganiza os demais nós. Teste da lógica: `node scripts/test-movement.mjs`.
+Ao selecionar vários nós, o botão **Organizar** oferece alinhamento nas seis direções e distribuição horizontal, vertical ou uniforme. Nós bloqueados ficam imóveis. O modo **Automático** reorganiza o ramo após soltar; a opção de evitar sobreposição pode ser configurada na conta, no mapa e no nó. Quando ativada, o destino do arraste é ajustado à posição livre mais próxima, preservando as distâncias internas do conjunto; se não houver espaço, a posição anterior é mantida. As conexões hierárquicas passam automaticamente para os lados voltados um ao outro durante o arraste. Teste da lógica: `node scripts/test-movement.mjs`.
 
 ## Preferências da conta
 

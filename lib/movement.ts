@@ -1,5 +1,5 @@
 import type { LayoutMode, MindMap, MindNode, MovementMode } from '../types';
-import { layoutBranch } from './maps';
+import { layoutBranch, visibleNodes } from './maps';
 
 export type Point = { x: number; y: number };
 export type NodeDimensions = Map<string, { width: number; height: number }>;
@@ -115,6 +115,29 @@ export function overlappingIds(nodes: MindNode[], movedIds: Set<string>, gap = 1
     if (a.node.x < b.node.x + b.width + gap && a.node.x + a.width + gap > b.node.x && a.node.y < b.node.y + b.height + gap && a.node.y + a.height + gap > b.node.y) { collisions.add(a.node.id); collisions.add(b.node.id); }
   }
   return collisions;
+}
+
+/** Keep a dragged group rigid while finding the closest free landing position. */
+export function snapMoveAwayFromOverlap(map: MindMap, movedIds: Set<string>, dimensions?: NodeDimensions): { map: MindMap; adjusted: boolean; blocked: boolean } {
+  if (!movedIds.size) return { map, adjusted: false, blocked: false };
+  const visible = visibleNodes(map.nodes);
+  const moving = visible.filter(node => movedIds.has(node.id));
+  const stationary = visible.filter(node => !movedIds.has(node.id));
+  const intersectsStationary = (dx: number, dy: number) => moving.some(node => stationary.some(other => intersects({ ...node, x: node.x + dx, y: node.y + dy }, other, 12, dimensions)));
+  if (!intersectsStationary(0, 0)) return { map, adjusted: false, blocked: false };
+  // The first available offset is chosen by distance, with a vertical preference
+  // so horizontal mind-map branches keep their visual direction.
+  const step = 24;
+  for (let radius = 1; radius <= 50; radius++) {
+    const candidates: Point[] = [];
+    for (let x = -radius; x <= radius; x++) for (const y of [-radius, radius]) candidates.push({ x: x * step, y: y * step });
+    for (let y = -radius + 1; y < radius; y++) for (const x of [-radius, radius]) candidates.push({ x: x * step, y: y * step });
+    candidates.sort((a, b) => a.x * a.x + a.y * a.y - b.x * b.x - b.y * b.y || Math.abs(a.x) - Math.abs(b.x));
+    for (const candidate of candidates) if (!intersectsStationary(candidate.x, candidate.y)) {
+      return { map: { ...map, nodes: map.nodes.map(node => movedIds.has(node.id) ? { ...node, x: node.x + candidate.x, y: node.y + candidate.y } : node) }, adjusted: true, blocked: false };
+    }
+  }
+  return { map, adjusted: false, blocked: true };
 }
 
 function intersects(a: MindNode, b: MindNode, gap = 12, dimensions?: NodeDimensions): boolean {
