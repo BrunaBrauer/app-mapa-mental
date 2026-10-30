@@ -29,6 +29,8 @@ Este documento define o comportamento esperado do editor. A experiência toma co
 | RF-09 | Importar e exportar | JSON preserva o mapa; PNG, PDF e Markdown produzem arquivos utilizáveis. |
 | RF-10 | Sincronizar entre dispositivos | Usuários autenticados recuperam os mesmos mapas pelo Supabase após a gravação. |
 | RF-11 | Integrar IA e Drive de modo explícito | Usuário escolhe o arquivo no Drive e revisa sugestões da IA antes de salvar. |
+| RF-12 | Configurar movimentação espacial | Modos individual, hierárquico e automático respeitam a prioridade nó → mapa → conta; arraste de ramo é uma ação de desfazer. |
+| RF-13 | Bloquear e organizar posições | Nós bloqueados ficam fixos; alinhamento e distribuição em lote ignoram bloqueios; reorganizar ramo conserva os outros ramos. |
 
 ## Requisitos não funcionais e critérios de qualidade
 
@@ -46,7 +48,11 @@ Antes de publicar alterações no editor, verificar lint, build, fluxos de sele�
 
 ## Movimento e publicação
 
-- Durante o arraste, nós e conexões acompanham o ponteiro continuamente. As posições são gravadas e entram no histórico uma vez ao soltar; o layout passa a livre.
+- Durante o arraste, nós e conexões acompanham o ponteiro continuamente. As posições são gravadas e entram no histórico uma vez ao soltar; o layout escolhido não muda.
+- O modo de movimentação padrão é hierárquico: mover um pai aplica o mesmo ΔX/ΔY a todos os descendentes, inclusive os recolhidos. Individual move somente o nó. Automático mostra o deslocamento durante o arraste e reorganiza somente o ramo ao soltar.
+- A prioridade é nó explícito → pai herdado → mapa explícito → preferência global. Desativar “Aplicar a novos filhos” grava nos novos filhos a decisão de não herdar; filhos antigos continuam com suas configurações.
+- Bloqueio de posição impede arraste do nó e cancela integralmente o arraste de um ramo que o contenha. Comandos de layout mantêm nós bloqueados no lugar. O comando temporário “Mover ramo inteiro” vale por um arraste e não muda as preferências.
+- Prevenção de sobreposição atua na reorganização automática; arraste hierárquico apenas avisa, e arraste individual continua livre. Alinhar/distribuir ignora nós bloqueados. Cada operação de ramo ou grupo é uma entrada única no histórico.
 - O zoom é preservado ao editar, criar ou recolher nós. Ajustar à tela é uma ação explícita, além do enquadramento inicial ao abrir um mapa.
 - A elevação visual do nó durante o movimento respeita a preferência do sistema por movimento reduzido.
 - O build executa `scripts/verify-editor-css.mjs` para impedir publicação sem os estilos dos menus, seleção e arraste. A validação dos gestos no navegador continua necessária.

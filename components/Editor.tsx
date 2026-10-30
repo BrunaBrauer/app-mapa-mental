@@ -6,15 +6,17 @@ import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronLeft, Cloud, Copy
 import MapCanvas from './MapCanvas';
 import RelationshipQuickToolbar from './RelationshipQuickToolbar';
 import MultiNodeToolbar from './MultiNodeToolbar';
+import MovementSettings from './MovementSettings';
 import type { NodeAction, NodePanel } from './NodeQuickToolbar';
-import { autoLayout, layoutBranch, layoutMap, createMap, createTemplate, descendants, visibleNodes, toMarkdown, uid, type TemplateKey } from '../lib/maps';
+import { autoLayout, layoutMap, createMap, createTemplate, descendants, visibleNodes, toMarkdown, uid, type TemplateKey } from '../lib/maps';
 import { layoutOptions } from './LayoutPicker';
 import { importFontFile, loadImportedFonts, type ImportedFont } from '../lib/fonts';
 import { downloadDriveFile, driveConfigured, pickDriveFile, preloadDrive, saveMapToDrive } from '../lib/google-drive';
 import { parseMapFile, parseMindomoArchive } from '../lib/import-map';
 import { pickNodeStyle } from '../lib/node-style';
+import { alignNodes, childMovementSettings, collectNodeDimensions, effectiveAvoidOverlap, reorganizeBranch, type AlignCommand } from '../lib/movement';
 import { defaultPreferences, normalizePreferences, type Preferences } from '../lib/preferences';
-import type { MindMap, MindNode } from '../types';
+import type { LayoutMode, MindMap, MindNode, MovementMode } from '../types';
 
 type Props = { userName: string; signOutPath: string; initialPreferences?: Preferences };
 type Status = 'loading' | 'saved' | 'saving' | 'error';
@@ -62,6 +64,8 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
   const selectOne = useCallback((id: string | null) => { setSelectedId(id); setSelectedIds(id ? [id] : []); }, []);
   const [dark, setDark] = useState(initialPreferences.dark); const [grid, setGrid] = useState(initialPreferences.grid); const [sidebar, setSidebar] = useState(initialPreferences.sidebar);
   const [alwaysToolbar, setAlwaysToolbar] = useState(initialPreferences.alwaysToolbar);
+  const [globalMovementMode, setGlobalMovementMode] = useState<MovementMode>(initialPreferences.movementMode);
+  const [globalAvoidOverlap, setGlobalAvoidOverlap] = useState(initialPreferences.avoidOverlap);
   const [preferencesReady, setPreferencesReady] = useState(!localMode);
   const [preferenceError, setPreferenceError] = useState(false);
   const savedPreferences = useRef(JSON.stringify(initialPreferences));
@@ -71,7 +75,7 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
     const frame = requestAnimationFrame(() => {
     try {
       const stored = normalizePreferences(JSON.parse(localStorage.getItem('nodum:preferences:v1') || '{}'));
-      setDark(stored.dark); setGrid(stored.grid); setSidebar(stored.sidebar); setAlwaysToolbar(stored.alwaysToolbar);
+      setDark(stored.dark); setGrid(stored.grid); setSidebar(stored.sidebar); setAlwaysToolbar(stored.alwaysToolbar); setGlobalMovementMode(stored.movementMode); setGlobalAvoidOverlap(stored.avoidOverlap);
       savedPreferences.current = JSON.stringify(stored);
     } catch { /* Keep defaults if browser storage is unavailable. */ }
     setPreferencesReady(true);
@@ -80,7 +84,7 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
   }, []);
   useEffect(() => {
     if (!preferencesReady) return;
-    const value = JSON.stringify({ dark, grid, sidebar, alwaysToolbar });
+    const value = JSON.stringify({ dark, grid, sidebar, alwaysToolbar, movementMode: globalMovementMode, avoidOverlap: globalAvoidOverlap });
     if (value === savedPreferences.current) return;
     const timer = setTimeout(() => {
       savedPreferences.current = value;
@@ -97,7 +101,7 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
       });
     }, 350);
     return () => clearTimeout(timer);
-  }, [dark, grid, sidebar, alwaysToolbar, preferencesReady]);
+  }, [dark, grid, sidebar, alwaysToolbar, globalMovementMode, globalAvoidOverlap, preferencesReady]);
   const [search, setSearch] = useState(''); const [exportOpen, setExportOpen] = useState(false); const [driveOpen, setDriveOpen] = useState(false); const [shareOpen, setShareOpen] = useState(false); const [linkCopied, setLinkCopied] = useState(false);
   const [history, setHistory] = useState<{ past: MindMap[]; future: MindMap[] }>({ past: [], future: [] });
   const [fonts, setFonts] = useState<ImportedFont[]>([]);
@@ -107,6 +111,9 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
   const [aiProposal, setAiProposal] = useState<{ nodeId: string; action: string; items: string[]; summary: string } | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [quickPanel, setQuickPanel] = useState<{ id: string; panel: NodePanel; key: number } | null>(null);
+  const [temporaryBranchId, setTemporaryBranchId] = useState<string | null>(null);
+  const [movementNotice, setMovementNotice] = useState('');
+  useEffect(() => { if (!movementNotice) return; const timer = setTimeout(() => setMovementNotice(''), 4500); return () => clearTimeout(timer); }, [movementNotice]);
   const branchClipboard = useRef<{ nodes: MindNode[]; rootId: string } | null>(null);
   const styleClipboard = useRef<Partial<MindNode> | null>(null);
   const flowRef = useRef<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null>(null);
@@ -149,14 +156,14 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
   useEffect(() => { preloadDrive(); }, []);
   const save = useCallback((map: MindMap) => { const prior = saveTimers.current.get(map.id); if (prior) clearTimeout(prior); setStatus('saving'); saveTimers.current.set(map.id, setTimeout(async () => { try { const result = await api<{ map: MindMap }>(`/api/maps/${map.id}`, { method: 'PUT', body: JSON.stringify(map) }); setMaps(current => current.map(m => m.id === map.id && m.updatedAt === map.updatedAt ? { ...m, updatedAt: result.map.updatedAt } : m)); setStatus('saved'); } catch { setStatus('error'); } saveTimers.current.delete(map.id); }, 650)); }, []);
   const commit = useCallback((next: MindMap, record = true) => { const previous = maps.find(m => m.id === next.id); if (!previous) return; if (record) setHistory(h => ({ past: [...h.past, previous].slice(-50), future: [] })); const fresh = { ...next, updatedAt: Date.now() }; setMaps(current => current.map(m => m.id === next.id ? fresh : m)); save(fresh); }, [maps, save]);
-  const switchMap = (id: string) => { setActiveId(id); selectOne(null); setSelectedEdgeId(null); setHistory({ past: [], future: [] }); setShareOpen(false); };
+  const switchMap = (id: string) => { setActiveId(id); selectOne(null); setSelectedEdgeId(null); setTemporaryBranchId(null); setHistory({ past: [], future: [] }); setShareOpen(false); };
   const addMap = async (template?: TemplateKey) => { const map = template ? createTemplate(template) : createMap(); try { await api('/api/maps', { method: 'POST', body: JSON.stringify(map) }); setMaps(current => [map, ...current]); switchMap(map.id); setStatus('saved'); } catch { setStatus('error'); } };
   const duplicateMap = async (map: MindMap) => { const copy = { ...map, id: uid(), title: `${map.title} (cópia)`, shareToken: null, updatedAt: Date.now(), nodes: map.nodes.map(n => ({ ...n })) }; try { await api('/api/maps', { method: 'POST', body: JSON.stringify(copy) }); setMaps(current => [copy, ...current]); switchMap(copy.id); } catch { setStatus('error'); } };
   const importJson = async (file?: File) => { if (!file) return; try { if (file.size > 25 * 1024 * 1024) throw new Error('Use um arquivo de até 25 MB.'); const header = new Uint8Array(await file.slice(0, 2).arrayBuffer()); const { map, warning } = header[0] === 0x50 && header[1] === 0x4b ? parseMindomoArchive(new Uint8Array(await file.arrayBuffer()), file.name) : parseMapFile(await file.text(), file.name); await api('/api/maps', { method: 'POST', body: JSON.stringify(map) }); setMaps(current => [map, ...current]); switchMap(map.id); if (warning) window.alert(warning); } catch (error) { window.alert(error instanceof Error ? error.message : 'Não foi possível importar este mapa.'); } if (importRef.current) importRef.current.value = ''; };
   const importFromDrive = async () => { if (driveBusy) return; setDriveBusy(true); setDriveOpen(false); try { const doc = await pickDriveFile(); if (!doc) return; const blob = await downloadDriveFile(doc.id); await importJson(new File([blob], doc.name || 'mapa.json', { type: blob.type })); } catch (error) { window.alert(error instanceof Error ? error.message : 'Falha ao abrir o Google Drive.'); } finally { setDriveBusy(false); } };
   const backupToDrive = async () => { setDriveOpen(false); if (!active || driveBusy) return; setDriveBusy(true); try { await saveMapToDrive(active); window.alert('Cópia do mapa salva no Google Drive.'); } catch (error) { window.alert(error instanceof Error ? error.message : 'Falha ao salvar no Google Drive.'); } finally { setDriveBusy(false); } };
   const deleteMap = async (map: MindMap) => { if (!window.confirm(`Excluir “${map.title}”? Esta ação não pode ser desfeita.`)) return; try { await api(`/api/maps/${map.id}`, { method: 'DELETE' }); setMaps(current => current.filter(m => m.id !== map.id)); if (activeId === map.id) switchMap(maps.find(m => m.id !== map.id)?.id ?? ''); } catch { setStatus('error'); } };
-  const addChild = useCallback((id: string) => { if (!active) return; const parent = active.nodes.find(n => n.id === id); if (!parent) return; const siblings = active.nodes.filter(n => n.parentId === id); const side = active.layout === 'right' ? 'right' : parent.parentId ? (parent.x < 0 ? 'left' : 'right') : (siblings.length % 2 ? 'left' : 'right'); const reference = active.levelReferences?.find(entry => entry.parentId === id); const line = active.levelConnections?.find(entry => entry.parentId === id); const child: MindNode = { icon: '', background: '#ffffff', border: '#000000', color: '#20243b', ...active.defaultNodeStyle, ...reference?.style, connectionStyle: line?.style, id: uid(), parentId: id, text: 'Nova ideia', x: parent.x + (side === 'left' ? -260 : 260), y: parent.y + siblings.length * 100, side }; const nodes = layoutMap([...active.nodes, child], active.layout, active.spacing); commit({ ...active, nodes }); selectOne(child.id); }, [active, commit, selectOne]);
+  const addChild = useCallback((id: string) => { if (!active) return; const parent = active.nodes.find(n => n.id === id); if (!parent) return; const siblings = active.nodes.filter(n => n.parentId === id); const side = active.layout === 'right' ? 'right' : parent.parentId ? (parent.x < 0 ? 'left' : 'right') : (siblings.length % 2 ? 'left' : 'right'); const reference = active.levelReferences?.find(entry => entry.parentId === id); const line = active.levelConnections?.find(entry => entry.parentId === id); const child: MindNode = { icon: '', background: '#ffffff', border: '#000000', color: '#20243b', ...active.defaultNodeStyle, ...reference?.style, ...childMovementSettings(parent), connectionStyle: line?.style, id: uid(), parentId: id, text: 'Nova ideia', x: parent.x + (side === 'left' ? -260 : 260), y: parent.y + siblings.length * 100, side }; const nodes = layoutMap([...active.nodes, child], active.layout, active.spacing); commit({ ...active, nodes }); selectOne(child.id); }, [active, commit, selectOne]);
   const editNode = useCallback((id: string, text: string) => { if (active) commit({ ...active, nodes: active.nodes.map(n => n.id === id ? { ...n, text } : n) }); }, [active, commit]);
   const patchNodeById = (id: string, patch: Partial<MindNode>) => { if (active) commit({ ...active, nodes: active.nodes.map(n => n.id === id ? { ...n, ...patch } : n) }); };
   const applyReference = (id: string, mode: 'size' | 'format' | 'both') => {
@@ -183,6 +190,13 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
     const nodes = [...active.nodes, ...copies]; commit({ ...active, nodes: layoutMap(nodes, active.layout, active.spacing) }); selectOne(ids.get(id)!);
   };
   const toggleNode = useCallback((id: string) => { if (active) commit({ ...active, nodes: active.nodes.map(n => n.id === id ? { ...n, collapsed: !n.collapsed } : n) }); }, [active, commit]);
+  const applyLayout = (mode: LayoutMode) => {
+    if (!active) return;
+    if (mode === 'free') { commit({ ...active, layout: mode }); return; }
+    const root = active.nodes.find(node => !node.parentId && !node.floating);
+    if (!root) return;
+    commit(reorganizeBranch({ ...active, layout: mode }, root.id, active.avoidOverlap ?? globalAvoidOverlap, collectNodeDimensions()));
+  };
   const openQuickPanel = (id: string, panel: NodePanel) => { selectOne(id); setQuickPanel({ id, panel, key: Date.now() }); };
   const requestAi = async (node: MindNode, action: 'ideas' | 'questions' | 'ai-summary' | 'swot') => {
     if (aiBusy || !active) return;
@@ -205,7 +219,7 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
     } else {
       const reference = active.levelReferences?.find(entry => entry.parentId === node.id);
       const line = active.levelConnections?.find(entry => entry.parentId === node.id);
-      const children: MindNode[] = aiProposal.items.map((text, index) => ({ ...active.defaultNodeStyle, ...reference?.style, connectionStyle: line?.style, id: uid(), parentId: node.id, text, x: node.x + 260, y: node.y + index * 100, side: 'right' }));
+      const children: MindNode[] = aiProposal.items.map((text, index) => ({ ...active.defaultNodeStyle, ...reference?.style, ...childMovementSettings(node), connectionStyle: line?.style, id: uid(), parentId: node.id, text, x: node.x + 260, y: node.y + index * 100, side: 'right' }));
       commit({ ...active, nodes: layoutMap([...active.nodes, ...children], active.layout, active.spacing) });
       selectOne(children[0]?.id || node.id);
     }
@@ -213,9 +227,15 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
   };
   const quickAction = (id: string, action: NodeAction) => {
     if (!active) return; const node = active.nodes.find(n => n.id === id); if (!node) return; selectOne(id);
+    if (action === 'move-branch') { setTemporaryBranchId(id); setMovementNotice('Mover ramo inteiro: arraste o nó uma vez. Esta escolha não altera o modo configurado.'); return; }
+    if (action === 'reorganize-branch' || action === 'restore-layout') {
+      const base = action === 'restore-layout' ? { ...active, nodes: active.nodes.map(item => item.id === id ? { ...item, branchLayout: undefined } : item) } : active;
+      const next = reorganizeBranch(base, id, effectiveAvoidOverlap(base, id, globalAvoidOverlap), collectNodeDimensions());
+      commit(next); setMovementNotice('Ramo reorganizado. Use Desfazer para recuperar as posições anteriores.'); return;
+    }
     if (action === 'child') { addChild(id); return; }
     if (action === 'sibling') { if (node.parentId) addChild(node.parentId); return; }
-    if (action === 'same-style' && node.parentId) { const copy = { ...node, id: uid(), text: 'Nova ideia', richText: undefined, x: node.x, y: node.y + 100, comments: [], note: '', image: undefined }; const nodes = [...active.nodes, copy]; commit({ ...active, nodes: layoutMap(nodes, active.layout, active.spacing) }); selectOne(copy.id); return; }
+    if (action === 'same-style' && node.parentId) { const parent = active.nodes.find(item => item.id === node.parentId)!; const copy: MindNode = { ...pickNodeStyle(node), ...childMovementSettings(parent), id: uid(), parentId: node.parentId, text: 'Nova ideia', x: node.x, y: node.y + 100 }; const nodes = [...active.nodes, copy]; commit({ ...active, nodes: layoutMap(nodes, active.layout, active.spacing) }); selectOne(copy.id); return; }
     if (action === 'relationship') { setRelationSourceId(id); return; }
     if (action === 'boundary') { patchNodeById(id, { boundary: !node.boundary }); return; }
     if (action === 'summary') { const summary = window.prompt('Resumo deste ramo:', node.summary || ''); if (summary !== null) patchNodeById(id, { summary }); return; }
@@ -228,11 +248,11 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
     if (action.startsWith('preset:')) { applyStylePreset(id, action.slice('preset:'.length)); return; }
     if (action === 'apply-level-line') { applyLevelConnection(id); return; }
     if (action === 'collapse') { toggleNode(id); return; }
-    if (action.startsWith('spacing-')) { const spacing = action === 'spacing-compact' ? { x: 210, y: 82 } : action === 'spacing-wide' ? { x: 320, y: 150 } : { x: 260, y: 112 }; commit({ ...active, spacing, nodes: layoutMap(active.nodes, active.layout, spacing) }); return; }
+    if (action.startsWith('spacing-')) { const spacing = action === 'spacing-compact' ? { x: 210, y: 82 } : action === 'spacing-wide' ? { x: 320, y: 150 } : { x: 260, y: 112 }; const root = active.nodes.find(item => !item.parentId && !item.floating); const next = { ...active, spacing }; commit(root && active.layout !== 'free' ? reorganizeBranch(next, root.id, active.avoidOverlap ?? globalAvoidOverlap, collectNodeDimensions()) : next); return; }
     if (layoutOptions.some(option => option.mode === action)) {
       const mode = action as MindMap['layout'];
-      if (!node.parentId && !node.floating) commit({ ...active, layout: mode, nodes: layoutMap(active.nodes, mode, active.spacing) });
-      else { const nodes = active.nodes.map(item => item.id === id ? { ...item, branchLayout: mode } : item); commit({ ...active, nodes: layoutBranch(nodes, id, mode, active.spacing) }); }
+      if (!node.parentId && !node.floating) applyLayout(mode);
+      else { const nodes = active.nodes.map(item => item.id === id ? { ...item, branchLayout: mode } : item); const next = { ...active, nodes }; commit(mode === 'free' ? next : reorganizeBranch(next, id, effectiveAvoidOverlap(next, id, globalAvoidOverlap), collectNodeDimensions())); }
       return;
     }
     if (action === 'duplicate') { duplicateBranch(id); return; }
@@ -257,7 +277,7 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
     const labels = suggestions[action]; if (!labels) return;
     const reference = active.levelReferences?.find(entry => entry.parentId === id);
     const line = active.levelConnections?.find(entry => entry.parentId === id);
-    const children: MindNode[] = labels.map((text, index) => ({ ...active.defaultNodeStyle, ...reference?.style, connectionStyle: line?.style, id: uid(), parentId: id, text, x: node.x + 260, y: node.y + index * 100, side: 'right' }));
+    const children: MindNode[] = labels.map((text, index) => ({ ...active.defaultNodeStyle, ...reference?.style, ...childMovementSettings(node), connectionStyle: line?.style, id: uid(), parentId: id, text, x: node.x + 260, y: node.y + index * 100, side: 'right' }));
     const nodes = [...active.nodes, ...children]; commit({ ...active, nodes: layoutMap(nodes, active.layout, active.spacing) }); selectOne(children[0].id);
   };
   const quickActionRef = useRef(quickAction);
@@ -282,13 +302,11 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
     commit({ ...active, nodes: active.nodes.filter(node => !ids.has(node.id)), relationships: active.relationships?.filter(link => !ids.has(link.source) && !ids.has(link.target)) });
     selectMany([]);
   }, [active, selectedIds, commit, selectMany]);
-  const alignMany = (edge: 'left' | 'center' | 'right') => {
+  const alignMany = (command: AlignCommand) => {
     if (!active || selectedIds.length < 2) return;
-    const ids = new Set(selectedIds);
-    const chosen = active.nodes.filter(node => ids.has(node.id));
-    const width = (node: MindNode) => node.width || (!node.parentId && !node.floating ? 182 : 145);
-    const x = edge === 'left' ? Math.min(...chosen.map(node => node.x)) : edge === 'right' ? Math.max(...chosen.map(node => node.x + width(node))) : chosen.reduce((sum, node) => sum + node.x + width(node) / 2, 0) / chosen.length;
-    commit({ ...active, layout: 'free', nodes: active.nodes.map(node => ids.has(node.id) ? { ...node, x: edge === 'left' ? x : edge === 'right' ? x - width(node) : x - width(node) / 2 } : node) });
+    const next = alignNodes(active, selectedIds, command, collectNodeDimensions());
+    if (next !== active && next.nodes.some((node, index) => node.x !== active.nodes[index].x || node.y !== active.nodes[index].y)) commit(next);
+    else setMovementNotice('Os nós selecionados já estão alinhados ou têm posição bloqueada.');
   };
   const undo = useCallback(() => { if (!active || !history.past.length) return; const previous = history.past.at(-1)!; setHistory(h => ({ past: h.past.slice(0, -1), future: [active, ...h.future] })); commit(previous, false); }, [active, history, commit]);
   const redo = useCallback(() => { if (!active || !history.future.length) return; const next = history.future[0]; setHistory(h => ({ past: [...h.past, active], future: h.future.slice(1) })); commit(next, false); }, [active, history, commit]);
@@ -307,6 +325,7 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
       else if (selectedId && command && key === 'v') { event.preventDefault(); quickActionRef.current(selectedId, event.altKey ? 'paste-style' : 'paste'); }
       else if (selectedId && command && key === 'd') { event.preventDefault(); quickActionRef.current(selectedId, 'duplicate'); }
       else if (selectedId && command && key === 'l') { event.preventDefault(); quickActionRef.current(selectedId, 'relationship'); }
+      else if (selectedId && event.altKey && event.shiftKey && key === 'm') { event.preventDefault(); quickActionRef.current(selectedId, 'move-branch'); }
       else if (selectedId && event.altKey && key === 'enter') { event.preventDefault(); quickActionRef.current(selectedId, 'same-style'); }
       else if (event.key === 'Tab' && selectedId && selectedIds.length === 1) { event.preventDefault(); addChild(selectedId); }
       else if (event.key === 'Enter' && selected?.parentId && selectedIds.length === 1) { event.preventDefault(); addChild(selected.parentId); }
@@ -336,7 +355,7 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
       <div className="sidebar-bottom"><div className="tip-card"><span>✦ DICA RÁPIDA</span><p>Selecione uma ideia e pressione <kbd>Tab</kbd> para criar um subnó.</p></div><div className="profile"><span className="avatar">{userName.charAt(0).toUpperCase()}</span><span className="profile-name">{userName}</span>{!localMode && <a href={signOutPath} target="_top" title="Sair"><LogOut size={16}/></a>}</div></div>
     </aside>
     <main className="main-area">{preferenceError && <div role="alert" className="preferences-error">Não foi possível salvar suas preferências na conta. Altere uma opção para tentar novamente.</div>}<header className="toolbar"><div className="toolbar-left">{!sidebar && <button className="icon-button" onClick={() => setSidebar(true)} aria-label="Abrir menu"><Menu size={19}/></button>}<span className="crumb">Meus mapas</span><span className="crumb-sep">/</span>{active ? <input className="map-title" aria-label="Nome do mapa" value={active.title} onChange={e => commit({ ...active, title: e.target.value })} /> : <span className="map-title placeholder">Bem-vindo</span>}<span className={`save-status ${status}`}>{status === 'saving' ? <LoaderCircle size={13} className="spin"/> : status === 'error' ? <AlertCircle size={13}/> : <Check size={13}/>} {status === 'saving' ? 'Salvando' : status === 'error' ? 'Falha ao salvar' : status === 'loading' ? 'Carregando' : (localMode ? 'Salvo neste navegador' : 'Salvo na nuvem')}</span></div><div className="toolbar-right"><button className="icon-button" title="Desfazer" disabled={!history.past.length} onClick={undo}><Undo2 size={18}/></button><button className="icon-button" title="Refazer" disabled={!history.future.length} onClick={redo}><Redo2 size={18}/></button><span className="toolbar-divider"/><button className="icon-button" title={dark ? 'Tema claro' : 'Tema escuro'} onClick={() => setDark(!dark)}>{dark ? <Sun size={18}/> : <Moon size={18}/>}</button><input ref={importRef} type="file" accept=".json,.mom,.pmom,.txt,.md,.markdown,application/json,text/plain,text/markdown" hidden onChange={e => importJson(e.target.files?.[0])}/><button className="outline-button" onClick={() => importRef.current?.click()}><ArrowUpFromLine size={16}/> Importar</button><div className="dropdown-wrap"><button className="outline-button" disabled={!active} onClick={() => setExportOpen(!exportOpen)}><ArrowDownToLine size={16}/> Exportar <ChevronDown size={14}/></button>{exportOpen && <div className="dropdown-menu"><button onClick={() => exportFile('png')}>Imagem PNG</button><button onClick={() => exportFile('pdf')}>Documento PDF</button><button onClick={() => exportFile('md')}>Markdown</button><button onClick={() => exportFile('json')}>Arquivo JSON</button></div>}</div><div className="dropdown-wrap"><button className="outline-button drive-button" disabled={driveBusy} onClick={() => setDriveOpen(!driveOpen)} title="Google Drive"><Cloud size={16}/> {driveBusy ? 'Processando…' : 'Drive'} <ChevronDown size={14}/></button>{driveOpen && <div className="dropdown-menu">{!driveConfigured() && <p className="drive-setup">Conecte o Google Cloud para ativar o Drive. Veja o README.</p>}<button disabled={!driveConfigured()} onClick={importFromDrive}>Importar do Drive (.json, .mom, .pmom, .txt, .md)</button><button disabled={!driveConfigured() || !active} onClick={backupToDrive}>Exportar cópia para o Drive (.json)</button></div>}</div><button className="share-button" disabled={!active} onClick={share}><Share2 size={16}/> Compartilhar</button></div></header>
-      {active ? <div className="workspace"><div className="canvas-wrap"><div className="canvas-top"><div className="canvas-badge"><span className="pulse-dot"/> {relationSourceId ? 'Clique em outro nó para criar a relação' : selectedIds.length > 1 ? `${selectedIds.length} nós selecionados · Ctrl+clique para alternar` : 'Ctrl+clique ou Ctrl+arraste para selecionar vários nós'}</div><div className="canvas-actions"><button className={grid ? 'active' : ''} onClick={() => setGrid(!grid)} title="Alternar grade"><Grid3X3 size={17}/></button><span/><button onClick={() => flowRef.current?.zoomOut()} title="Diminuir zoom"><ZoomOut size={17}/></button><button onClick={() => flowRef.current?.zoomIn()} title="Aumentar zoom"><ZoomIn size={17}/></button></div></div><MapCanvas map={active} selectedId={selectedId} selectedIds={selectedIds} onSelect={selectCanvasNode} onSelectMany={selectMany} onSelectEdge={selectCanvasEdge} onChange={commit} onAdd={addChild} onEdit={editNode} onToggle={toggleNode} onAction={quickAction} onOpenQuick={openQuickPanel} quickPanel={quickPanel} fonts={fonts} onImportFont={importFontForNode} onFavoriteIcons={setFavoriteIcons} onPatch={patchNodeById} onImage={quickImage} onDrivePick={quickDrivePick} alwaysToolbar={alwaysToolbar} onToggleAlwaysToolbar={toggleAlwaysToolbar} grid={grid} flowRef={flowRef}/><div className="canvas-bottom"><span>{active.nodes.length} ideias <span className="bullet">·</span> {active.nodes.filter(n => n.parentId).length} conexões</span><div className="layout-control"><button onClick={() => commit({ ...active, layout: 'balanced', nodes: layoutMap(active.nodes, 'balanced', active.spacing) })} className={active.layout === 'balanced' ? 'active' : ''}>Equilibrado</button><button onClick={() => commit({ ...active, layout: 'right', nodes: layoutMap(active.nodes, 'right', active.spacing) })} className={active.layout === 'right' ? 'active' : ''}>À direita</button><button onClick={() => commit({ ...active, layout: 'free' })} className={active.layout === 'free' ? 'active' : ''}>Livre</button><button onClick={() => flowRef.current?.fit()} title="Ajustar mapa à tela" aria-label="Ajustar mapa à tela"><Maximize size={15}/></button></div><button className="organize" onClick={() => commit({ ...active, layout: active.layout === 'free' ? 'right' : active.layout, nodes: layoutMap(active.nodes, active.layout === 'free' ? 'right' : active.layout, active.spacing) })}><WandSparkles size={15}/> Organizar</button></div></div>
+      {active ? <div className="workspace"><div className="canvas-wrap"><div className="canvas-top"><div className={movementNotice ? "canvas-badge canvas-notice" : "canvas-badge"} title={movementNotice || undefined}><span className="pulse-dot"/> {movementNotice ? movementNotice : temporaryBranchId ? 'Arraste o nó para mover o ramo inteiro' : relationSourceId ? 'Clique em outro nó para criar a relação' : selectedIds.length > 1 ? `${selectedIds.length} nós selecionados · Ctrl+clique para alternar` : 'Ctrl+clique ou Ctrl+arraste para selecionar vários nós'}</div><div className="canvas-actions"><button className={grid ? 'active' : ''} onClick={() => setGrid(!grid)} title="Alternar grade"><Grid3X3 size={17}/></button><span/><button onClick={() => flowRef.current?.zoomOut()} title="Diminuir zoom"><ZoomOut size={17}/></button><button onClick={() => flowRef.current?.zoomIn()} title="Aumentar zoom"><ZoomIn size={17}/></button></div></div><MapCanvas map={active} globalMovementMode={globalMovementMode} globalAvoidOverlap={globalAvoidOverlap} temporaryBranchId={temporaryBranchId} onTemporaryBranchDone={() => setTemporaryBranchId(null)} onMoveNotice={setMovementNotice} selectedId={selectedId} selectedIds={selectedIds} onSelect={selectCanvasNode} onSelectMany={selectMany} onSelectEdge={selectCanvasEdge} onChange={commit} onAdd={addChild} onEdit={editNode} onToggle={toggleNode} onAction={quickAction} onOpenQuick={openQuickPanel} quickPanel={quickPanel} fonts={fonts} onImportFont={importFontForNode} onFavoriteIcons={setFavoriteIcons} onPatch={patchNodeById} onImage={quickImage} onDrivePick={quickDrivePick} alwaysToolbar={alwaysToolbar} onToggleAlwaysToolbar={toggleAlwaysToolbar} grid={grid} flowRef={flowRef}/><div className="canvas-bottom"><span>{active.nodes.length} ideias <span className="bullet">·</span> {active.nodes.filter(n => n.parentId).length} conexões</span><MovementSettings map={active} globalMode={globalMovementMode} globalAvoidOverlap={globalAvoidOverlap} onGlobalMode={setGlobalMovementMode} onGlobalAvoidOverlap={setGlobalAvoidOverlap} onMapPatch={patch => commit({ ...active, ...patch })}/><div className="layout-control"><button onClick={() => applyLayout('balanced')} className={active.layout === 'balanced' ? 'active' : ''}>Equilibrado</button><button onClick={() => applyLayout('right')} className={active.layout === 'right' ? 'active' : ''}>À direita</button><button onClick={() => applyLayout('free')} className={active.layout === 'free' ? 'active' : ''}>Livre</button><button onClick={() => flowRef.current?.fit()} title="Ajustar mapa à tela" aria-label="Ajustar mapa à tela"><Maximize size={15}/></button></div><button className="organize" onClick={() => applyLayout(active.layout === 'free' ? 'right' : active.layout)}><WandSparkles size={15}/> Organizar</button></div></div>
         {selectedNodes.length > 1 && <MultiNodeToolbar nodes={selectedNodes} fonts={fonts} favoriteIcons={active.favoriteIcons || []} onPatch={patchMany} onImportFont={importFontForMany} onFavoriteIcons={setFavoriteIcons} onAlign={alignMany} onDelete={removeMany} onClear={() => selectMany([])}/>}
         {selectedRelationship && <RelationshipQuickToolbar relation={selectedRelationship} onPatch={patchRelationship} onDelete={deleteRelationship} onClose={() => setSelectedEdgeId(null)}/>}
       </div> : <div className="empty-workspace"><div className="empty-illustration"><span>✦</span><span>✧</span><span>✦</span></div><p className="eyebrow">SEU ESPAÇO CRIATIVO</p><h1>Ideias incríveis começam aqui.</h1><p>Transforme pensamentos soltos em conexões claras.<br/>Crie seu primeiro mapa ou comece com um template.</p><button className="share-button" onClick={() => addMap()}><Plus size={17}/> Criar meu primeiro mapa</button><button className="import-empty" onClick={() => importRef.current?.click()}>Importar Mindomo (.mom/.pmom), TXT ou Markdown</button></div>}

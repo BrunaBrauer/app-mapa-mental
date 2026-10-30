@@ -135,7 +135,7 @@ export function layoutBranch(nodes: MindNode[], id: string, mode: LayoutMode, sp
   if (!anchor) return nodes;
   const branch = nodes.filter(node => ids.has(node.id)).map(node => node.id === id ? { ...node, parentId: null } : node);
   const placed = new Map(autoLayout(branch, mode, spacing).map(node => [node.id, node]));
-  return nodes.map(node => { const position = placed.get(node.id); return position ? { ...node, x: anchor.x + position.x, y: anchor.y + position.y } : node; });
+  return nodes.map(node => { const position = placed.get(node.id); return position && !node.positionLocked ? { ...node, x: anchor.x + position.x, y: anchor.y + position.y } : node; });
 }
 export function layoutMap(nodes: MindNode[], mode: LayoutMode, spacing = { x: 260, y: 112 }): MindNode[] {
   let result = autoLayout(nodes, mode, spacing);
@@ -145,7 +145,8 @@ export function layoutMap(nodes: MindNode[], mode: LayoutMode, spacing = { x: 26
     result = result.map(node => originals.has(node.id) ? { ...node, x: originals.get(node.id)!.x, y: originals.get(node.id)!.y } : node);
   });
   nodes.filter(node => node.branchLayout && node.branchLayout !== 'free').forEach(node => { result = layoutBranch(result, node.id, node.branchLayout!, spacing); });
-  return result;
+  const originalPositions = new Map(nodes.filter(node => node.positionLocked).map(node => [node.id, { x: node.x, y: node.y }]));
+  return result.map(node => originalPositions.has(node.id) ? { ...node, ...originalPositions.get(node.id)! } : node);
 }
 export function descendants(nodes: MindNode[], id: string): Set<string> {
   const found = new Set([id]); let changed = true;

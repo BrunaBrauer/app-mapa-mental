@@ -27,6 +27,8 @@ assert.throws(() => parseMapFile('<!DOCTYPE x><map/>', 'bad.mom'));
 assert.throws(() => parseMapFile('PK\u0003\u0004', 'archive.mom'));
 assert.throws(() => parseMapFile(JSON.stringify({ ...copy, nodes: [{ ...copy.nodes[0], parentId: copy.nodes[0].id }] }), 'cycle.json'));
 assert.throws(() => parseMapFile(JSON.stringify({ ...copy, nodes: [copy.nodes[0], copy.nodes[0]] }), 'duplicate.json'));
+assert.throws(() => parseMapFile(JSON.stringify({ ...copy, movementMode: 'inexistente' }), 'invalid-movement.json'));
+assert.throws(() => parseMapFile(JSON.stringify({ ...copy, nodes: [{ ...copy.nodes[0], positionLocked: 'sim' }] }), 'invalid-lock.json'));
 const jsonMom = parseMapFile(JSON.stringify({ name: 'Mapa', topics: [{ text: 'Centro', subTopics: [{ text: 'Filho' }] }] }), 'mapa.mom');
 assert.equal(jsonMom.map.nodes.length, 2);
 const archive = zipSync({ 'document.json': strToU8(JSON.stringify({ mapInfo: { rootId: 'root', name: 'Exemplo' } })), 'nodes.json': strToU8(JSON.stringify([{ id: 'root', title: 'Centro' }, { id: 'child', parentId: 'root', title: 'Filho' }, { id: 'gone', parentId: 'root', title: 'Excluído', deleted: true }])) });

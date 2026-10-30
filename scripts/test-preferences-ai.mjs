@@ -11,14 +11,17 @@ const auth = moduleUrl('export const requireUser = () => globalThis.testAuth();'
 const preferences = moduleUrl(await compile('lib/preferences.ts'));
 const { PUT } = await import(moduleUrl((await compile('app/api/preferences/route.ts')).replace("'../../../lib/supabase/server'", JSON.stringify(auth)).replace("'../../../lib/preferences'", JSON.stringify(preferences))));
 const request = body => new Request('https://example.com/api/preferences', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-const settings = { dark: true, grid: false, sidebar: false, alwaysToolbar: true };
+const settings = { dark: true, grid: false, sidebar: false, alwaysToolbar: true, movementMode: 'hierarchical', avoidOverlap: true };
 assert.equal((await PUT(request(settings))).status, 200);
 assert.deepEqual(user.user_metadata.nodum_preferences, settings);
+assert.equal((await PUT(request({ ...settings, movementMode: 'automatic', avoidOverlap: false }))).status, 200);
+assert.equal(user.user_metadata.nodum_preferences.movementMode, 'automatic');
+assert.equal(user.user_metadata.nodum_preferences.avoidOverlap, false);
 assert.equal((await PUT(request({ dark: 'yes' }))).status, 400);
-assert.equal(updates, 1);
+assert.equal(updates, 2);
 user = null;
 assert.equal((await PUT(request(settings))).status, 401);
-assert.equal(updates, 1);
+assert.equal(updates, 2);
 
 process.env.NEXT_PUBLIC_STORAGE_MODE = 'cloud';
 process.env.GEMINI_API_KEY = 'test-only';

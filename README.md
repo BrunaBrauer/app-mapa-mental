@@ -84,8 +84,14 @@ As fontes importadas pelo usuário ficam no IndexedDB do navegador. O mapa é si
 
 Teste do importador: `node scripts/test-import.mjs`.
 
+## Movimentação e organização
+
+O padrão é **Hierárquico**: ao arrastar um nó, todos os seus descendentes acompanham o movimento sem alterar a hierarquia nem o layout escolhido. No controle **Movimentação**, na barra inferior, configure o padrão da conta e uma exceção para o mapa. No menu do nó, em **Movimentação e organização** (também acessível com clique direito), escolha uma exceção individual, bloqueie a posição ou use **Mover ramo inteiro** para o próximo arraste (`Alt+Shift+M`). **Reorganizar ramo** ajusta apenas o ramo selecionado; **Restaurar posicionamento automático** remove o layout próprio do ramo. Um nó bloqueado impede o arraste completo do ramo, com aviso na tela.
+
+Ao selecionar vários nós, o botão **Organizar** oferece alinhamento nas seis direções e distribuição horizontal, vertical ou uniforme. Nós bloqueados ficam imóveis. O modo **Automático** reorganiza o ramo após soltar; a opção de evitar sobreposição pode ser configurada na conta, no mapa e no nó. O modo **Individual** não reorganiza os demais nós. Teste da lógica: `node scripts/test-movement.mjs`.
+
 ## Preferências da conta
 
-Tema, grade, barra lateral e exibição automática do menu são gravados em `nodum_preferences` nos metadados do usuário autenticado no Supabase. Não são usados para autorização. A última gravação prevalece; outro dispositivo carrega as preferências ao abrir/recarregar o editor. As gravações são serializadas após 350 ms de inatividade e falhas aparecem no editor. No modo local de testes, as preferências ficam no navegador. Fontes personalizadas continuam armazenadas apenas no navegador onde foram importadas.
+Tema, grade, barra lateral, exibição automática do menu, modo global de movimentação e prevenção global de sobreposição são gravados em `nodum_preferences` nos metadados do usuário autenticado no Supabase. Não são usados para autorização. A última gravação prevalece; outro dispositivo carrega as preferências ao abrir/recarregar o editor. As gravações são serializadas após 350 ms de inatividade e falhas aparecem no editor. No modo local de testes, as preferências ficam no navegador. Fontes personalizadas continuam armazenadas apenas no navegador onde foram importadas.
 
 Teste das rotas com serviços simulados: `node scripts/test-preferences-ai.mjs`. Uma chamada real Gemini exige sessão autenticada e `GEMINI_API_KEY` na Vercel (sem prefixo público); o deploy deve ser refeito após adicionar a variável. O uso pode consumir a cota/crédito do projeto Google.

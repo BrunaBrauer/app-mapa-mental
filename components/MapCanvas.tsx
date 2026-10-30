@@ -7,18 +7,21 @@ import StyledEdge from './StyledEdge';
 import type { NodeAction, NodePanel } from './NodeQuickToolbar';
 import type { LineStyle, MindMap, MindNode } from '../types';
 import { descendants, visibleNodes } from '../lib/maps';
+import { collectNodeDimensions, effectiveAvoidOverlap, effectiveMovementMode, movementModes, overlappingIds, projectDrag, reorganizeBranch } from '../lib/movement';
+import type { MovementMode } from '../types';
 
-type Props = { map: MindMap; selectedId: string | null; selectedIds?: string[]; onSelect: (id: string | null) => void; onSelectMany?: (ids: string[]) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: NodePanel; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
+type Props = { map: MindMap; selectedId: string | null; selectedIds?: string[]; globalMovementMode?: MovementMode; globalAvoidOverlap?: boolean; temporaryBranchId?: string | null; onTemporaryBranchDone?: () => void; onMoveNotice?: (message: string) => void; onSelect: (id: string | null) => void; onSelectMany?: (ids: string[]) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: NodePanel; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
 const nodeTypes = { mind: MindNodeView };
 const edgeTypes = { styled: StyledEdge };
 const edgeMarker = (symbol: LineStyle['end'], color: string) => symbol === 'arrow' ? { type: MarkerType.ArrowClosed, color, width: 14, height: 14 } : undefined;
 const edgeDash = (style?: LineStyle) => style?.pattern === 'dashed' ? '8 5' : style?.pattern === 'dotted' ? '2 5' : undefined;
-function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] : [], onSelect, onSelectMany, onSelectEdge, onChange, onAdd, onEdit, onToggle, onAction, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
+function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] : [], globalMovementMode = 'hierarchical', globalAvoidOverlap = true, temporaryBranchId, onTemporaryBranchDone, onMoveNotice, onSelect, onSelectMany, onSelectEdge, onChange, onAdd, onEdit, onToggle, onAction, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
   const dragPositions = useRef(new Map<string, { x: number; y: number; dragging: boolean }>());
-  const [livePositions, setLivePositions] = useState(() => new Map<string, { x: number; y: number; dragging: boolean }>());
+  const automaticPreview = useRef(new Map<string, Map<string, { x: number; y: number }>>());
+  const [livePositions, setLivePositions] = useState(() => new Map<string, { x: number; y: number; dragging: boolean; source: boolean }>());
   const selectionRef = useRef(selectedIds);
   useEffect(() => { selectionRef.current = selectedIds; }, [selectedIds]);
   useEffect(() => {
@@ -27,11 +30,11 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     return () => { flowRef.current = null; };
   }, [flowRef, zoomIn, zoomOut, fitView]);
   const visible = useMemo(() => visibleNodes(map.nodes), [map.nodes]);
-  const baseNodes = useMemo<FlowMindNode[]>(() => { const childCounts = new Map<string, number>(); for (const node of map.nodes) if (node.parentId) childCounts.set(node.parentId, (childCounts.get(node.parentId) || 0) + 1); return visible.map(item => ({ id: item.id, type: 'mind', position: { x: item.x, y: item.y }, dragging: false, selected: selectedIds.includes(item.id), draggable: !readOnly, data: { item, childCount: childCounts.get(item.id) || 0, selected: selectedIds.includes(item.id), mapLayout: map.layout, toolbarVisible: selectedIds.length === 1 && (alwaysToolbar || contextNodeId === item.id || quickPanel?.id === item.id), alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, favoriteIcons: map.favoriteIcons || [], onFavoriteIcons, presets: map.stylePresets || [], requestedPanel: quickPanel?.id === item.id ? quickPanel : null } })); }, [visible, map.nodes, map.layout, map.favoriteIcons, map.stylePresets, selectedIds, contextNodeId, quickPanel, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons]);
+  const baseNodes = useMemo<FlowMindNode[]>(() => { const childCounts = new Map<string, number>(); for (const node of map.nodes) if (node.parentId) childCounts.set(node.parentId, (childCounts.get(node.parentId) || 0) + 1); const modes = movementModes(map, globalMovementMode); return visible.map(item => ({ id: item.id, type: 'mind', position: { x: item.x, y: item.y }, dragging: false, selected: selectedIds.includes(item.id), draggable: !readOnly && !item.positionLocked, data: { item, childCount: childCounts.get(item.id) || 0, selected: selectedIds.includes(item.id), mapLayout: map.layout, effectiveMovement: modes.get(item.id) || globalMovementMode, inheritedAvoidOverlap: map.avoidOverlap ?? globalAvoidOverlap, toolbarVisible: selectedIds.length === 1 && (alwaysToolbar || contextNodeId === item.id || quickPanel?.id === item.id), alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, favoriteIcons: map.favoriteIcons || [], onFavoriteIcons, presets: map.stylePresets || [], requestedPanel: quickPanel?.id === item.id ? quickPanel : null } })); }, [visible, map, globalMovementMode, globalAvoidOverlap, selectedIds, contextNodeId, quickPanel, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons]);
   // Preserve unchanged node/data references during pointer movement.
   const nodes = useMemo(() => baseNodes.map(node => {
     const position = livePositions.get(node.id);
-    return position ? { ...node, position: { x: position.x, y: position.y }, dragging: position.dragging } : node;
+    return position ? { ...node, position: { x: position.x, y: position.y }, dragging: position.dragging && position.source, data: { ...node.data, dragParticipant: position.dragging && !position.source } } : node;
   }), [baseNodes, livePositions]);
   const edges = useMemo(() => { const byId = new Map(visible.map(node => [node.id, node])); const tree = visible.filter(n => n.parentId && byId.has(n.parentId)).map(n => {
     const parent = byId.get(n.parentId!)!; const dx = n.x - parent.x; const dy = n.y - parent.y;
@@ -61,17 +64,48 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     }
     const moved = changes.filter((c): c is NodePositionChange => c.type === 'position' && Boolean(c.position));
     if (!moved.length) return;
-    // Atualize a posição em cada frame, mas grave uma única operação ao soltar.
-    const positions = new Map(dragPositions.current);
-    for (const change of moved) positions.set(change.id, { ...change.position!, dragging: Boolean(change.dragging) });
-    dragPositions.current = positions;
-    setLivePositions(positions);
-    if (moved.some(change => change.dragging)) return;
-    const changed = map.nodes.some(node => { const position = positions.get(node.id); return position && (position.x !== node.x || position.y !== node.y); });
-    if (changed) onChange({ ...map, layout: 'free', nodes: map.nodes.map(node => { const position = positions.get(node.id); return position ? { ...node, x: position.x, y: position.y } : node; }) });
+    // React Flow reports only the dragged nodes. Project the same delta onto
+    // descendants in memory so the whole branch and its edges move each frame.
+    const requested = new Map(dragPositions.current);
+    for (const change of moved) requested.set(change.id, { ...change.position!, dragging: Boolean(change.dragging) });
+    dragPositions.current = requested;
+    const projected = projectDrag(map, requested, globalMovementMode, temporaryBranchId);
+    const isDragging = moved.some(change => change.dragging);
+    const previewPositions = new Map(projected.positions);
+    if (isDragging) for (const rootId of projected.automaticRoots) {
+      let preview = automaticPreview.current.get(rootId);
+      if (!preview) {
+        const organized = reorganizeBranch(map, rootId, effectiveAvoidOverlap(map, rootId, globalAvoidOverlap), collectNodeDimensions());
+        const branch = descendants(map.nodes, rootId);
+        preview = new Map(organized.nodes.filter(node => branch.has(node.id)).map(node => [node.id, { x: node.x, y: node.y }]));
+        automaticPreview.current.set(rootId, preview);
+      }
+      const root = map.nodes.find(node => node.id === rootId)!;
+      const requestedRoot = requested.get(rootId)!;
+      for (const id of projected.positions.keys()) {
+        const planned = preview.get(id);
+        if (planned) previewPositions.set(id, { x: planned.x + requestedRoot.x - root.x, y: planned.y + requestedRoot.y - root.y });
+      }
+    }
+    setLivePositions(new Map([...previewPositions].map(([id, position]) => [id, { ...position, dragging: isDragging, source: requested.has(id) }])));
+    if (isDragging) return;
+    if (projected.blocked) onMoveNotice?.(projected.blocked);
+    else if (projected.positions.size) {
+      let next: MindMap = { ...map, nodes: map.nodes.map(node => { const position = projected.positions.get(node.id); return position ? { ...node, x: position.x, y: position.y } : node; }) };
+      const changed = next.nodes.some((node, index) => node.x !== map.nodes[index].x || node.y !== map.nodes[index].y);
+      if (changed) {
+        const dimensions = collectNodeDimensions();
+        const risk = projected.automaticRoots.length === 0 && [...requested.keys()].some(id => effectiveMovementMode(map, id, globalMovementMode) === 'hierarchical' && effectiveAvoidOverlap(map, id, globalAvoidOverlap)) && overlappingIds(next.nodes, new Set(projected.positions.keys()), 12, dimensions).size > 0;
+        for (const id of projected.automaticRoots) next = reorganizeBranch(next, id, effectiveAvoidOverlap(next, id, globalAvoidOverlap), dimensions);
+        onChange(next);
+        if (risk) onMoveNotice?.('Possível sobreposição após o arraste. Use “Reorganizar ramo” para ajustar o espaçamento.');
+      }
+    }
+    if (temporaryBranchId && requested.has(temporaryBranchId)) onTemporaryBranchDone?.();
     dragPositions.current = new Map();
+    automaticPreview.current.clear();
     setLivePositions(new Map());
-  }, [map, onChange, onSelectMany, readOnly]);
+  }, [map, onChange, onSelectMany, readOnly, globalMovementMode, globalAvoidOverlap, temporaryBranchId, onTemporaryBranchDone, onMoveNotice]);
   const onConnect = useCallback((connection: Connection) => {
     if (readOnly || !connection.source || !connection.target || connection.source === connection.target) return;
     // O gesto nos conectores cria uma relação livre sem alterar a árvore.
@@ -98,7 +132,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     onChange({ ...map, relationships: [...(map.relationships || []), { id: crypto.randomUUID(), source: state.fromNode.id, target: targetId, sourceHandle, targetHandle }] });
   }, [map, onChange, readOnly]);
   return <div className="canvas-surface" onKeyDown={e => { if (e.code === 'Space' && !['INPUT','TEXTAREA'].includes((e.target as HTMLElement).tagName)) { setSpaceHeld(true); e.preventDefault(); } }} onKeyUp={e => { if (e.code === 'Space') setSpaceHeld(false); }} tabIndex={0}>
-    <ReactFlow proOptions={{ hideAttribution: true }} autoPanOnNodeFocus={false} nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onConnect={onConnect} onConnectEnd={onConnectEnd} onNodeClick={(event, node) => { setContextNodeId(null); if (!event.ctrlKey && !event.metaKey && !event.shiftKey) onSelect(node.id); }} onEdgeClick={(_event, edge) => { if (readOnly) return; if (map.relationships?.some(link => link.id === edge.id)) onSelectEdge?.(edge.id); else onSelect(edge.target); }} onNodeContextMenu={(event, node) => { if (readOnly) return; event.preventDefault(); setContextNodeId(node.id); onSelect(node.id); }} onPaneClick={(event) => { if (event.ctrlKey || event.metaKey) return; setContextNodeId(null); onSelect(null); }} fitView fitViewOptions={{ padding: 0.3, maxZoom: 1 }} minZoom={0.18} maxZoom={2.5} panOnDrag={spaceHeld ? [0, 1, 2] : [1, 2]} zoomOnScroll zoomOnDoubleClick={false} selectionOnDrag={false} selectionKeyCode={readOnly ? null : ["Control", "Meta", "Shift"]} multiSelectionKeyCode={["Control", "Meta"]} selectionMode={SelectionMode.Partial} deleteKeyCode={null} nodeDragThreshold={3} nodesConnectable={!readOnly} connectionMode={ConnectionMode.Loose} nodesDraggable={!readOnly} elementsSelectable={!readOnly} connectionLineType={ConnectionLineType.SmoothStep}>
+    <ReactFlow proOptions={{ hideAttribution: true }} autoPanOnNodeFocus={false} nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onConnect={onConnect} onConnectEnd={onConnectEnd} onNodeClick={(event, node) => { setContextNodeId(null); if (!event.ctrlKey && !event.metaKey && !event.shiftKey) onSelect(node.id); }} onEdgeClick={(_event, edge) => { if (readOnly) return; if (map.relationships?.some(link => link.id === edge.id)) onSelectEdge?.(edge.id); else onSelect(edge.target); }} onNodeContextMenu={(event, node) => { if (readOnly) return; event.preventDefault(); setContextNodeId(node.id); onOpenQuick?.(node.id, 'movement'); }} onPaneClick={(event) => { if (event.ctrlKey || event.metaKey) return; setContextNodeId(null); onSelect(null); }} fitView fitViewOptions={{ padding: 0.3, maxZoom: 1 }} minZoom={0.18} maxZoom={2.5} panOnDrag={spaceHeld ? [0, 1, 2] : [1, 2]} zoomOnScroll zoomOnDoubleClick={false} selectionOnDrag={false} selectionKeyCode={readOnly ? null : ["Control", "Meta", "Shift"]} multiSelectionKeyCode={["Control", "Meta"]} selectionMode={SelectionMode.Partial} deleteKeyCode={null} nodeDragThreshold={3} nodesConnectable={!readOnly} connectionMode={ConnectionMode.Loose} nodesDraggable={!readOnly} elementsSelectable={!readOnly} connectionLineType={ConnectionLineType.SmoothStep}>
       {grid && <Background variant={BackgroundVariant.Dots} gap={22} size={1.1} color="#dadde9" />}
       <ViewportPortal>{annotations.map(({ node, x, y, width, height }) => <div key={node.id} className="branch-annotation" style={{ left: x, top: y, width, height }}>{node.boundary && <div className="branch-boundary"/>}{node.summary && <div className="branch-summary">{node.summary}</div>}</div>)}</ViewportPortal>
       <Controls position="bottom-left" showInteractive={false}/>
