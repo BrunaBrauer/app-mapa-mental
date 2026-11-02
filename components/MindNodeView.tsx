@@ -31,7 +31,7 @@ function MindNodeView({ data }: NodeProps<FlowMindNode>) {
   }, [item.text, item.richText, item.fontSize, item.fontFamily, item.padding, item.paddingTop, item.paddingBottom, item.wrapText, item.width, item.height, item.maxHeight]);
   const startEditing = () => setEditing(true);
   const isRoot = !item.parentId && !item.floating;
-  const shape = item.shape ?? 'rounded';
+  const shape = data.mapLayout === 'flowchart' && item.flowDecision ? 'diamond' : item.shape ?? 'rounded';
   const polygons: Record<string, string> = {
     diamond: '50,0 100,50 50,100 0,50', hexagon: '22,0 78,0 100,50 78,100 22,100 0,50',
     'tag-right': '0,0 82,0 100,50 82,100 0,100', 'tag-left': '18,0 100,0 100,100 18,100 0,50',

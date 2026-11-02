@@ -3,6 +3,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import type { MindMap, MindNode } from '../types';
 import { autoLayout, uid } from './maps';
 import { validMap } from './server-maps';
+import { migrateMapLayouts } from './layout-migration';
 
 type RecordValue = Record<string, unknown>;
 const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
@@ -28,7 +29,7 @@ export function parseMapFile(source: string, filename: string): { map: MindMap; 
   if (Array.isArray(raw.nodes)) {
     const candidate = { ...raw, id: uid(), shareToken: null, updatedAt: Date.now() };
     if (!validMap(candidate)) throw new Error('O mapa JSON contém dados inválidos (limite de 2.000 nós, 100 níveis e 1.000 caracteres por nó).');
-    return { map: candidate };
+    return { map: migrateMapLayouts(candidate) };
   }
   const root = record(raw.map || raw);
   const roots = array(record(root.topics).topic ?? root.topics ?? root.topic);
@@ -52,15 +53,15 @@ export function parseMapFile(source: string, filename: string): { map: MindMap; 
   roots.forEach(topic => visit(topic, null, 0));
   if (!nodes.length) throw new Error('Nenhum tópico foi encontrado no arquivo.');
   const title = (text(root.name ?? root.title) || filename.replace(/\.(mom|json)$/i, '')).slice(0, 160);
-  const placed = autoLayout(nodes, 'right');
+  const placed = autoLayout(nodes, 'horizontal');
   // Keep independent roots apart; they do not become children of the main topic.
   let floatingRow = Math.max(...placed.map(node => node.y)) + 200;
   for (const node of placed) if (node.floating) {
-    const branch = autoLayout(placed.filter(item => item.id === node.id || isDescendant(item, node.id, placed)), 'right');
+    const branch = autoLayout(placed.filter(item => item.id === node.id || isDescendant(item, node.id, placed)), 'horizontal');
     for (const item of branch) { const target = placed.find(n => n.id === item.id)!; target.x = item.x; target.y = item.y + floatingRow; }
     floatingRow = Math.max(...placed.map(item => item.y)) + 200;
   }
-  return { map: { id: uid(), title, nodes: placed, layout: 'right', shareToken: null, updatedAt: Date.now() }, warning: 'Importado do Mindomo: tópicos, hierarquia, notas e links compatíveis. O layout foi organizado à direita. Estilos, anexos, tarefas e relações do Mindomo não são convertidos nesta versão.' };
+  return { map: { id: uid(), title, nodes: placed, layout: 'horizontal', shareToken: null, updatedAt: Date.now() }, warning: 'Importado do Mindomo: tópicos, hierarquia, notas e links compatíveis. O layout foi organizado horizontalmente. Estilos, anexos, tarefas e relações do Mindomo não são convertidos nesta versão.' };
 }
 
 export function parseMindomoArchive(bytes: Uint8Array, filename: string, nesting = 0): { map: MindMap; warning?: string } {
@@ -134,7 +135,7 @@ export function parseMindomoArchive(bytes: Uint8Array, filename: string, nesting
   // Hundreds of visible leaves make fitView zoom so far out that the map looks empty.
   // Keep every topic, but initially fold the first-level branches for readable navigation.
   if (nodes.length > 100) nodes.filter(node => node.parentId === nodes[0].id && nodes.some(child => child.parentId === node.id)).forEach(node => { node.collapsed = true; });
-  return { map: { id: uid(), title, nodes: autoLayout(nodes, 'right'), layout: 'right', shareToken: null, updatedAt: Date.now() }, warning: `Importados ${nodes.length} tópicos do Mindomo. ${recovered ? 'Tópicos sem ligação válida ao centro foram recuperados como ramos principais. ' : ''}${nodes.length > 100 ? 'Os ramos principais com subtópicos começam recolhidos; clique no indicador de cada ramo para abri-los. ' : ''}Estilos e anexos ainda não são convertidos.` };
+  return { map: { id: uid(), title, nodes: autoLayout(nodes, 'horizontal'), layout: 'horizontal', shareToken: null, updatedAt: Date.now() }, warning: `Importados ${nodes.length} tópicos do Mindomo. ${recovered ? 'Tópicos sem ligação válida ao centro foram recuperados como ramos principais. ' : ''}${nodes.length > 100 ? 'Os ramos principais com subtópicos começam recolhidos; clique no indicador de cada ramo para abri-los. ' : ''}Estilos e anexos ainda não são convertidos.` };
 }
 
 function parseOutline(content: string, filename: string): { map: MindMap; warning: string } {
@@ -182,7 +183,7 @@ function parseOutline(content: string, filename: string): { map: MindMap; warnin
     for (const node of nodes.slice(1)) if (!node.parentId) node.parentId = nodes[0].id;
   }
   if (nodes.length > 100) nodes.filter(node => node.parentId === nodes[0].id && nodes.some(child => child.parentId === node.id)).forEach(node => { node.collapsed = true; });
-  return { map: { id: uid(), title: (rootTitle || filename.replace(/\.(txt|md|markdown)$/i, '')).slice(0, 160), nodes: autoLayout(nodes, 'right'), layout: 'right', shareToken: null, updatedAt: Date.now() }, warning: `Importados ${nodes.length} tópicos. ${nodes.length > 100 ? 'Os ramos principais começam recolhidos. ' : ''}A estrutura textual foi organizada à direita; recursos fora do texto não são convertidos.` };
+  return { map: { id: uid(), title: (rootTitle || filename.replace(/\.(txt|md|markdown)$/i, '')).slice(0, 160), nodes: autoLayout(nodes, 'horizontal'), layout: 'horizontal', shareToken: null, updatedAt: Date.now() }, warning: `Importados ${nodes.length} tópicos. ${nodes.length > 100 ? 'Os ramos principais começam recolhidos. ' : ''}A estrutura textual foi organizada horizontalmente; recursos fora do texto não são convertidos.` };
 }
 
 function isDescendant(node: MindNode, ancestor: string, nodes: MindNode[]): boolean {

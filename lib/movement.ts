@@ -95,8 +95,8 @@ export function reorderAlignedSibling(map: MindMap, id: string, dimensions?: Nod
   if (!parent) return { map, parentId: null, reordered: false, blocked: false };
   const siblings = map.nodes.filter(node => node.parentId === parent.id);
   if (siblings.length < 2) return { map, parentId: parent.id, reordered: false, blocked: false };
-  const mode = parent.branchLayout || (map.layout === 'free' ? 'right' : map.layout);
-  const alternating = !parent.parentId && ['balanced', 'split-down', 'fishbone', 'fishbone-left', 'timeline', 'timeline-left'].includes(mode);
+  const mode = parent.branchLayout || (map.layout === 'free' || map.layout === 'network' ? 'horizontal' : map.layout);
+  const alternating = !parent.parentId && ['bilateral', 'balanced', 'split-down', 'fishbone', 'fishbone-left', 'timeline', 'timeline-left'].includes(mode);
   const draggedIndex = siblings.findIndex(node => node.id === id);
   const group = alternating ? siblings.filter((_, index) => index % 2 === draggedIndex % 2) : siblings;
   if (group.some(node => node.positionLocked)) return { map, parentId: parent.id, reordered: false, blocked: true };
@@ -108,7 +108,7 @@ export function reorderAlignedSibling(map: MindMap, id: string, dimensions?: Nod
     const point = center(node);
     if (mode === 'radial') return Math.atan2(point.y - parentCenter.y, point.x - parentCenter.x);
     if (!parent.parentId && ['split-down', 'fishbone', 'fishbone-left', 'timeline', 'timeline-left'].includes(mode)) return Math.abs(point.x - parentCenter.x);
-    return ['down', 'up', 'org'].includes(mode) ? point.x : point.y;
+    return ['flowchart', 'vertical', 'down', 'up', 'org'].includes(mode) ? point.x : point.y;
   };
   const others = group.filter(node => node.id !== id).sort((a, b) => rank(a) - rank(b));
   const target = rank(dragged);
@@ -186,12 +186,12 @@ export function reorganizeBranch(map: MindMap, id: string, avoidOverlap = true, 
   const anchor = map.nodes.find(node => node.id === id);
   if (!anchor) return map;
   const ids = branchIds(id, childrenOf(map.nodes));
-  const mode: LayoutMode = anchor.branchLayout || (map.layout === 'free' ? 'right' : map.layout);
+  const mode: LayoutMode = anchor.branchLayout || (map.layout === 'free' || map.layout === 'network' ? 'horizontal' : map.layout);
   const originals = new Map(map.nodes.map(node => [node.id, node]));
   const planned = layoutBranch(map.nodes.map(node => ids.has(node.id) ? { ...node, collapsed: false } : node), id, mode, map.spacing);
   const next = planned.map(node => { const original = originals.get(node.id)!; return node.positionLocked ? { ...node, x: original.x, y: original.y, collapsed: original.collapsed } : { ...node, collapsed: original.collapsed }; });
-  if (avoidOverlap) {
-    const perpendicular = ['down', 'up', 'org'].includes(mode) ? 'x' : 'y';
+  if (avoidOverlap && mode !== 'cycle' && mode !== 'concentric') {
+    const perpendicular = ['flowchart', 'vertical', 'down', 'up', 'org'].includes(mode) ? 'x' : 'y';
     const sign = mode === 'up' || mode === 'left' || mode === 'org-left' ? -1 : 1;
     const occupied = next.filter(node => !ids.has(node.id) || node.positionLocked || node.id === id);
     for (const node of next.filter(node => ids.has(node.id) && node.id !== id && !node.positionLocked)) {

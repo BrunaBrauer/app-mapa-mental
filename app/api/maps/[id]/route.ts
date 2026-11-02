@@ -1,5 +1,6 @@
 import { requireUser } from '../../../../lib/supabase/server';
 import { fromRow, validMap, type MapRow } from '../../../../lib/server-maps';
+import { migrateMapLayouts } from '../../../../lib/layout-migration';
 
 type Context = { params: Promise<{ id: string }> };
 const missing = () => Response.json({ error: 'Mapa não encontrado.' }, { status: 404 });
@@ -10,7 +11,8 @@ export async function PUT(request: Request, context: Context) {
   const { id } = await context.params;
   const body: unknown = await request.json().catch(() => null);
   if (!validMap(body) || body.id !== id) return Response.json({ error: 'Mapa inválido.' }, { status: 400 });
-  const { data, error } = await client.from('mind_maps').update({ title: body.title, content: body, updated_at: new Date().toISOString() }).eq('id', id).eq('owner_id', user.id).select('id,title,content,share_token,updated_at').maybeSingle();
+  const normalized = migrateMapLayouts(body);
+  const { data, error } = await client.from('mind_maps').update({ title: normalized.title, content: normalized, updated_at: new Date().toISOString() }).eq('id', id).eq('owner_id', user.id).select('id,title,content,share_token,updated_at').maybeSingle();
   if (error) return Response.json({ error: 'Não foi possível salvar o mapa.' }, { status: 500 });
   if (!data) return missing();
   return Response.json({ map: fromRow(data as MapRow) });

@@ -1,17 +1,18 @@
 import type { LayoutMode, MindMap, MindNode, MovementMode, NodeShape, NodeStyle } from '../types';
+import { migrateMapLayouts } from './layout-migration';
 
 export type MapRow = { id: string; title: string; content: MindMap | null; share_token?: string | null; updated_at: string };
 
 export function fromRow(row: MapRow): MindMap {
   const content = row.content || ({} as MindMap);
-  return { ...content, id: row.id, title: row.title, nodes: content.nodes || [], layout: content.layout || 'right', updatedAt: new Date(row.updated_at).getTime(), shareToken: row.share_token || null };
+  return migrateMapLayouts({ ...content, id: row.id, title: row.title, nodes: content.nodes || [], layout: content.layout || 'horizontal', updatedAt: new Date(row.updated_at).getTime(), shareToken: row.share_token || null });
 }
 
 const MAX_NODES = 2000;
 const MAX_DEPTH = 100;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const date = /^\d{4}-\d{2}-\d{2}$/;
-const layouts: LayoutMode[] = ['right', 'left', 'balanced', 'down', 'up', 'split-down', 'radial', 'org', 'org-left', 'fishbone', 'fishbone-left', 'timeline', 'timeline-left', 'free'];
+const layouts: LayoutMode[] = ['horizontal', 'vertical', 'bilateral', 'radial', 'fishbone', 'timeline', 'network', 'cycle', 'concentric', 'flowchart', 'right', 'left', 'balanced', 'down', 'up', 'split-down', 'org', 'org-left', 'fishbone-left', 'timeline-left', 'free'];
 const movements: MovementMode[] = ['individual', 'hierarchical', 'automatic'];
 const shapes: NodeShape[] = ['rounded', 'rectangle', 'pill', 'ellipse', 'circle', 'diamond', 'hexagon', 'underline', 'transparent', 'tag-right', 'tag-left', 'arrow-right', 'arrow-left', 'arrow-up', 'arrow-down', 'bookmark-right', 'bookmark-left', 'half-rounded-right', 'half-rounded-left'];
 const styleKeys: (keyof NodeStyle)[] = ['background', 'border', 'color', 'shape', 'icon', 'fontSize', 'fontFamily', 'bold', 'italic', 'underline', 'strike', 'textAlign', 'textVerticalAlign', 'wrapText', 'textTransform', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'cornerRadius', 'borderWidth', 'borderStyle'];
@@ -88,10 +89,10 @@ function validNode(node: unknown): node is MindNode {
   if (!record(node)) return false;
   if (!text(node.id, 100, false) || !(node.parentId === null || text(node.parentId, 100, false)) || !text(node.text, 1000) || !finite(node.x, -10_000_000, 10_000_000) || !finite(node.y, -10_000_000, 10_000_000)) return false;
   if (node.floating === true && node.parentId !== null) return false;
-  if (!optionalOneOf(node.side, ['left', 'right']) || !optionalOneOf(node.branchLayout, layouts) || !optionalOneOf(node.shape, shapes) || !optionalOneOf(node.mediaType, ['video', 'audio'])) return false;
+  if (!optionalOneOf(node.side, ['left', 'right']) || !optionalOneOf(node.branchLayout, layouts) || !optionalOneOf(node.shape, shapes) || !optionalOneOf(node.mediaType, ['video', 'audio']) || !optionalOneOf(node.flowAnswer, ['yes', 'no'])) return false;
   if (!optionalOneOf(node.movementMode, movements) || !optionalOneOf(node.childAlignment, ['left', 'center', 'right']) || !optionalOneOf(node.sizeMode, ['auto', 'uniform', 'custom'])) return false;
   if (!optionalOneOf(node.textAlign, ['left', 'center', 'right']) || !optionalOneOf(node.textVerticalAlign, ['top', 'center', 'bottom']) || !optionalOneOf(node.textTransform, ['none', 'uppercase', 'lowercase'])) return false;
-  if (!['collapsed', 'floating', 'boundary', 'bold', 'italic', 'underline', 'strike', 'positionLocked', 'inheritMovement', 'inheritMovementToChildren', 'avoidOverlap', 'sizeLocked', 'lockAspectRatio', 'wrapText'].every(key => optionalBoolean(node[key]))) return false;
+  if (!['collapsed', 'floating', 'boundary', 'bold', 'italic', 'underline', 'strike', 'positionLocked', 'inheritMovement', 'inheritMovementToChildren', 'avoidOverlap', 'sizeLocked', 'lockAspectRatio', 'wrapText', 'flowDecision'].every(key => optionalBoolean(node[key]))) return false;
   if (!['note', 'summary'].every(key => optionalText(node[key], 100_000)) || !optionalText(node.label, 1000) || !optionalText(node.equation, 10_000) || !optionalText(node.icon, 24) || !optionalText(node.fontFamily, 200)) return false;
   if (!validWebUrl(node.url) || !validWebUrl(node.mediaUrl) || !validImage(node.image) || !validStyle(node)) return false;
   if (node.connectionStyle !== undefined && !validLineStyle(node.connectionStyle)) return false;

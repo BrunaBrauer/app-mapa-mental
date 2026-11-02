@@ -5,13 +5,17 @@ import ts from 'typescript';
 
 const compile = async path => ts.transpileModule(await readFile(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const url = code => `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
-const serverMaps = url(await compile('lib/server-maps.ts'));
+const migration = url(await compile('lib/layout-migration.ts'));
+const serverMaps = url((await compile('lib/server-maps.ts')).replace("'./layout-migration'", JSON.stringify(migration)));
 const source = (await compile('lib/import-map.ts'))
   .replace("'./maps'", JSON.stringify(url(await compile('lib/maps.ts'))))
   .replace("'./server-maps'", JSON.stringify(serverMaps))
+  .replace("'./layout-migration'", JSON.stringify(migration))
   .replace("'fast-xml-parser'", JSON.stringify(import.meta.resolve('fast-xml-parser')));
 const { parseMapFile, parseMindomoArchive } = await import(url(source.replace("'fflate'", JSON.stringify(import.meta.resolve('fflate')))));
 const { validMap } = await import(serverMaps);
+const { migrateMapLayouts } = await import(migration);
+const { autoLayout } = await import(url(await compile('lib/maps.ts')));
 const xml = `<?xml version="1.0"?><map xmlns="http://schemas.mindomo.com/application/version-3.6"><name>Planejamento</name><topics><topic><text>Raiz &amp; ação</text><subTopics><topic><text>Filho</text><notes>Uma nota</notes><hyperlink>https://example.com</hyperlink></topic><topic deleted="true"><text>Removido</text></topic></subTopics></topic></topics></map>`;
 const result = parseMapFile(xml, 'teste.mom');
 assert.equal(result.map.title, 'Planejamento');
@@ -25,6 +29,15 @@ const copy = parseMapFile(JSON.stringify({ ...result.map, shareToken: 'public-to
 assert.notEqual(copy.id, result.map.id);
 assert.equal(copy.shareToken, null);
 assert.deepEqual(copy.nodes, result.map.nodes);
+const legacy = { ...copy, layout: 'balanced', nodes: copy.nodes.map((node, index) => index ? { ...node, branchLayout: 'free' } : node) };
+const converted = migrateMapLayouts(legacy);
+assert.equal(converted.layout, 'bilateral');
+assert.equal(converted.nodes[1].branchLayout, 'network');
+assert.deepEqual(converted.nodes.map(({ id, x, y }) => ({ id, x, y })), legacy.nodes.map(({ id, x, y }) => ({ id, x, y })));
+assert.equal(migrateMapLayouts(converted), converted, 'Migration is idempotent');
+const floating = { id: 'floating', parentId: null, floating: true, text: 'Livre', x: 810, y: 440 };
+const arranged = autoLayout([...copy.nodes, floating], 'horizontal');
+assert.deepEqual(arranged.find(node => node.id === floating.id), floating, 'Horizontal layout preserves floating nodes');
 assert.throws(() => parseMapFile('<!DOCTYPE x><map/>', 'bad.mom'));
 assert.throws(() => parseMapFile('PK\u0003\u0004', 'archive.mom'));
 assert.throws(() => parseMapFile(JSON.stringify({ ...copy, nodes: [{ ...copy.nodes[0], parentId: copy.nodes[0].id }] }), 'cycle.json'));
@@ -38,6 +51,13 @@ assert.equal(sizedBackup.nodes[0].maxWidth, 420);
 assert.equal(styledBackup.nodes[0].childAlignment, 'center');
 assert.throws(() => parseMapFile(JSON.stringify({ ...copy, levelStyles: [{ depth: -1, style: {} }] }), 'invalid-level.json'));
 assert.equal(validMap(copy), true);
+assert.equal(validMap({ ...copy, layout: 'cycle' }), true);
+assert.equal(validMap({ ...copy, layout: 'concentric' }), true);
+const flowchart = { ...copy, layout: 'flowchart', nodes: copy.nodes.map((node, index) => index ? { ...node, flowAnswer: 'yes' } : { ...node, flowDecision: true }) };
+assert.equal(validMap(flowchart), true);
+assert.equal(parseMapFile(JSON.stringify(flowchart), 'fluxograma.json').map.nodes[1].flowAnswer, 'yes');
+assert.equal(validMap({ ...flowchart, nodes: [{ ...flowchart.nodes[0], flowDecision: 'yes' }, ...flowchart.nodes.slice(1)] }), false);
+assert.equal(validMap({ ...flowchart, nodes: [flowchart.nodes[0], { ...flowchart.nodes[1], flowAnswer: 'maybe' }] }), false);
 assert.equal(validMap({ ...copy, nodes: [] }), false);
 assert.equal(validMap({ ...copy, nodes: [copy.nodes[0], { ...copy.nodes[0], id: crypto.randomUUID() }] }), false, 'Only one central root is allowed');
 assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], parentId: 'missing' }] }), false);

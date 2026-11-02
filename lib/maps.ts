@@ -2,7 +2,7 @@ import type { MindMap, MindNode, LayoutMode } from '../types';
 
 export const uid = () => crypto.randomUUID();
 export const rootNode = (text = 'Ideia central'): MindNode => ({ id: uid(), parentId: null, text, x: 0, y: 0, icon: '', background: '#ffffff', border: '#000000', color: '#20243b', fontSize: 18, bold: true });
-export function createMap(title = 'Mapa sem título'): MindMap { return { id: uid(), title, layout: 'right', nodes: [rootNode()], updatedAt: Date.now() }; }
+export function createMap(title = 'Mapa sem título'): MindMap { return { id: uid(), title, layout: 'horizontal', nodes: [rootNode()], updatedAt: Date.now() }; }
 
 const templateData = {
   projeto: [['Objetivos', 'Escopo', 'Resultados'], ['Planejamento', 'Cronograma', 'Recursos'], ['Execução', 'Tarefas', 'Responsáveis'], ['Avaliação', 'Indicadores', 'Próximos passos']],
@@ -18,15 +18,77 @@ export function createTemplate(kind: TemplateKey): MindMap {
     map.nodes.push(parent);
     group.slice(1).forEach(text => map.nodes.push({ id: uid(), parentId: parent.id, text, x: 0, y: 0 }));
   });
-  map.nodes = autoLayout(map.nodes, 'right'); return map;
+  map.nodes = autoLayout(map.nodes, 'horizontal'); return map;
 }
 
 // Each visible leaf receives a row; parents are centered above their descendants.
 export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 260, y: 112 }): MindNode[] {
-  const next = nodes.map(n => ({ ...n })); if (mode === 'free' || !next.length) return next;
+  const next = nodes.map(n => ({ ...n })); if (mode === 'free' || mode === 'network' || !next.length) return next;
+  if (mode === 'horizontal') {
+    const placed = autoLayout(next, 'right', spacing);
+    const byId = new Map(placed.map(node => [node.id, node]));
+    const depth = (node: MindNode) => { let level = 0; let parent = node.parentId; const seen = new Set([node.id]); while (parent && byId.has(parent) && !seen.has(parent)) { seen.add(parent); level++; parent = byId.get(parent)!.parentId; } return level; };
+    const widths = new Map<number, number>();
+    for (const node of placed.filter(node => !node.floating)) widths.set(depth(node), Math.max(widths.get(depth(node)) || 0, node.width ?? (node.parentId ? 145 : 182)));
+    const columns = new Map<number, number>([[0, 0]]);
+    for (let level = 1; level <= widths.size; level++) columns.set(level, (columns.get(level - 1) || 0) + (widths.get(level - 1) || 145) + 36);
+    return placed.map(node => node.floating ? node : { ...node, x: columns.get(depth(node)) ?? node.x });
+  }
+  const flowchart = mode === 'flowchart';
+  if (mode === 'vertical' || flowchart) mode = 'down';
+  if (mode === 'bilateral') mode = 'balanced';
   const root = next.find(n => !n.parentId && !n.floating) ?? next[0]; root.x = 0; root.y = 0;
-  const kids = (id: string) => next.filter(n => n.parentId === id);
+  const kids = (id: string) => {
+    const children = next.filter(n => n.parentId === id);
+    const order = (node: MindNode) => node.flowAnswer === 'yes' ? 0 : node.flowAnswer === 'no' ? 1 : 2;
+    return flowchart ? children.sort((a, b) => order(a) - order(b)) : children;
+  };
   const branches = kids(root.id);
+  if (mode === 'cycle' || mode === 'concentric') {
+    const levels: MindNode[][] = [];
+    const seen = new Set([root.id]);
+    let parents = [root];
+    while (parents.length) {
+      const children = parents.flatMap(parent => parent.collapsed ? [] : kids(parent.id)).filter(node => !seen.has(node.id));
+      if (!children.length) break;
+      children.forEach(node => seen.add(node.id));
+      levels.push(children);
+      parents = children;
+    }
+    const radii: number[] = [];
+    levels.forEach((level, index) => {
+      const widest = Math.max(...level.map(node => node.width ?? 160));
+      const circumference = level.length * (widest + 48);
+      radii.push(Math.max((radii[index - 1] ?? 0) + spacing.x, circumference / (2 * Math.PI), spacing.x));
+    });
+    const centerX = (root.width ?? 182) / 2;
+    const centerY = (root.height ?? 72) / 2;
+    const place = (node: MindNode, depth: number, angle: number) => {
+      const radius = radii[depth - 1];
+      node.x = centerX + Math.cos(angle) * radius - (node.width ?? 160) / 2;
+      node.y = centerY + Math.sin(angle) * radius - (node.height ?? 64) / 2;
+    };
+    if (mode === 'concentric') {
+      levels.forEach((level, depth) => level.forEach((node, index) => place(node, depth + 1, -Math.PI / 2 + 2 * Math.PI * index / level.length)));
+    } else {
+      const stages = levels[0] || [];
+      const spread = 2 * Math.PI / Math.max(1, stages.length);
+      const placeDescendants = (parent: MindNode, depth: number, center: number, span: number) => {
+        const children = parent.collapsed ? [] : kids(parent.id).filter(node => seen.has(node.id));
+        children.forEach((child, index) => {
+          const angle = center + span * (index - (children.length - 1) / 2) / Math.max(1, children.length);
+          place(child, depth, angle);
+          placeDescendants(child, depth + 1, angle, span / Math.max(1, children.length));
+        });
+      };
+      stages.forEach((stage, index) => {
+        const angle = -Math.PI / 2 + spread * index;
+        place(stage, 1, angle);
+        placeDescendants(stage, 2, angle, spread);
+      });
+    }
+    return next;
+  }
   if (mode === 'down' || mode === 'up' || mode === 'org' || mode === 'org-left') {
     const vertical = mode !== 'org-left';
     const direction = mode === 'up' || mode === 'org-left' ? -1 : 1;
@@ -38,7 +100,7 @@ export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 2
       seen.add(node.id);
       const children = node.collapsed ? [] : kids(node.id).filter(child => !seen.has(child.id));
       const position = children.length ? (() => { const values = children.map(child => place(child, depth + 1)); return (values[0] + values[values.length - 1]) / 2; })() : slot++ * slotGap;
-      if (vertical) { node.x = position; node.y = direction * depth * spacing.x * (mode === 'org' ? .82 : 1); }
+      if (vertical) { node.x = position; node.y = direction * depth * (flowchart ? Math.max(180, spacing.y * 1.8) : spacing.x * (mode === 'org' ? .82 : 1)); }
       else { node.x = direction * depth * spacing.x * .85; node.y = position; }
       return position;
     };
@@ -129,7 +191,7 @@ export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 2
   placeSide(right, 1); placeSide(left, -1); return next;
 }
 export function layoutBranch(nodes: MindNode[], id: string, mode: LayoutMode, spacing = { x: 260, y: 112 }): MindNode[] {
-  if (mode === 'free') return nodes.map(node => ({ ...node }));
+  if (mode === 'free' || mode === 'network') return nodes.map(node => ({ ...node }));
   const ids = descendants(nodes, id);
   const anchor = nodes.find(node => node.id === id);
   if (!anchor) return nodes;
@@ -140,11 +202,11 @@ export function layoutBranch(nodes: MindNode[], id: string, mode: LayoutMode, sp
 export function layoutMap(nodes: MindNode[], mode: LayoutMode, spacing = { x: 260, y: 112 }): MindNode[] {
   let result = autoLayout(nodes, mode, spacing);
   // Preserve manually positioned branches when another part of the map is reorganized.
-  nodes.filter(node => node.branchLayout === 'free').forEach(branch => {
+  nodes.filter(node => node.branchLayout === 'free' || node.branchLayout === 'network').forEach(branch => {
     const originals = new Map(nodes.filter(node => descendants(nodes, branch.id).has(node.id)).map(node => [node.id, node]));
     result = result.map(node => originals.has(node.id) ? { ...node, x: originals.get(node.id)!.x, y: originals.get(node.id)!.y } : node);
   });
-  nodes.filter(node => node.branchLayout && node.branchLayout !== 'free').forEach(node => { result = layoutBranch(result, node.id, node.branchLayout!, spacing); });
+  nodes.filter(node => node.branchLayout && node.branchLayout !== 'free' && node.branchLayout !== 'network').forEach(node => { result = layoutBranch(result, node.id, node.branchLayout!, spacing); });
   const originalPositions = new Map(nodes.filter(node => node.positionLocked).map(node => [node.id, { x: node.x, y: node.y }]));
   return result.map(node => originalPositions.has(node.id) ? { ...node, ...originalPositions.get(node.id)! } : node);
 }
