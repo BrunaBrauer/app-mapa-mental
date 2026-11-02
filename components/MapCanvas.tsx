@@ -6,7 +6,7 @@ import type { ImportedFont } from '../lib/fonts';
 import StyledEdge from './StyledEdge';
 import type { NodeAction, NodePanel } from './NodeQuickToolbar';
 import type { LineStyle, MindMap, MindNode } from '../types';
-import { descendants, visibleNodes } from '../lib/maps';
+import { descendants, treemapRects, visibleNodes } from '../lib/maps';
 import { collectNodeDimensions, effectiveAvoidOverlap, movementModes, projectDrag, reorderAlignedSibling, reorganizeBranch, snapMoveAwayFromOverlap, visualSize } from '../lib/movement';
 import { alignedHandles } from '../lib/edge-geometry';
 import { applySiblingAlignments } from '../lib/visual-standardization';
@@ -33,17 +33,25 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     return () => { flowRef.current = null; };
   }, [flowRef, zoomIn, zoomOut, fitView]);
   const visible = useMemo(() => visibleNodes(map.nodes), [map.nodes]);
-  const baseNodes = useMemo<FlowMindNode[]>(() => { const childCounts = new Map<string, number>(); for (const node of map.nodes) if (node.parentId) childCounts.set(node.parentId, (childCounts.get(node.parentId) || 0) + 1); const modes = movementModes(map, globalMovementMode); return visible.map(item => ({ id: item.id, type: 'mind', position: { x: item.x, y: item.y }, dragging: false, selected: selectedIds.includes(item.id), draggable: !readOnly && !item.positionLocked, data: { item, map, childCount: childCounts.get(item.id) || 0, selected: selectedIds.includes(item.id), mapLayout: map.layout, effectiveMovement: modes.get(item.id) || globalMovementMode, inheritedAvoidOverlap: map.avoidOverlap ?? globalAvoidOverlap, toolbarVisible: selectedIds.length === 1 && (alwaysToolbar || contextNodeId === item.id || quickPanel?.id === item.id), alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, favoriteIcons: map.favoriteIcons || [], onFavoriteIcons, presets: map.stylePresets || [], requestedPanel: quickPanel?.id === item.id ? quickPanel : null } })); }, [visible, map, globalMovementMode, globalAvoidOverlap, selectedIds, contextNodeId, quickPanel, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons]);
+  const displayVisible = useMemo(() => {
+    if (map.layout !== 'treemap') return visible;
+    const rects = treemapRects(map.nodes);
+    return visible.map(node => { const rect = rects.get(node.id); return rect ? { ...node, ...rect } : node; })
+      .sort((a, b) => (rects.get(a.id)?.depth ?? 0) - (rects.get(b.id)?.depth ?? 0));
+  }, [visible, map.layout, map.nodes]);
+  const baseNodes = useMemo<FlowMindNode[]>(() => { const childCounts = new Map<string, number>(); for (const node of map.nodes) if (node.parentId) childCounts.set(node.parentId, (childCounts.get(node.parentId) || 0) + 1); const modes = movementModes(map, globalMovementMode); return displayVisible.map(item => ({ id: item.id, type: 'mind', position: { x: item.x, y: item.y }, dragging: false, selected: selectedIds.includes(item.id), draggable: !readOnly && !item.positionLocked && map.layout !== 'treemap' && map.layout !== 'matrix', data: { item, map, childCount: childCounts.get(item.id) || 0, selected: selectedIds.includes(item.id), mapLayout: map.layout, effectiveMovement: modes.get(item.id) || globalMovementMode, inheritedAvoidOverlap: map.avoidOverlap ?? globalAvoidOverlap, toolbarVisible: selectedIds.length === 1 && (alwaysToolbar || contextNodeId === item.id || quickPanel?.id === item.id), alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, favoriteIcons: map.favoriteIcons || [], onFavoriteIcons, presets: map.stylePresets || [], requestedPanel: quickPanel?.id === item.id ? quickPanel : null } })); }, [displayVisible, map, globalMovementMode, globalAvoidOverlap, selectedIds, contextNodeId, quickPanel, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons]);
   // Preserve unchanged node/data references during pointer movement.
   const nodes = useMemo(() => baseNodes.map(node => {
     const position = livePositions.get(node.id);
     return position ? { ...node, position: { x: position.x, y: position.y }, dragging: position.dragging && position.source, data: { ...node.data, dragParticipant: position.dragging && !position.source } } : node;
   }), [baseNodes, livePositions]);
   const edges = useMemo(() => {
-    const byId = new Map(visible.map(node => { const live = livePositions.get(node.id); return [node.id, live ? { ...node, x: live.x, y: live.y } : node] as const; }));
-    const root = visible.find(node => !node.parentId && !node.floating);
-    const stages = map.layout === 'cycle' && root ? visible.filter(node => node.parentId === root.id) : [];
-    const tree = visible.filter(n => n.parentId && byId.has(n.parentId) && !(stages.length >= 2 && n.parentId === root?.id)).map(n => {
+    const byId = new Map(displayVisible.map(node => { const live = livePositions.get(node.id); return [node.id, live ? { ...node, x: live.x, y: live.y } : node] as const; }));
+    const root = displayVisible.find(node => !node.parentId && !node.floating);
+    const stages = map.layout === 'cycle' && root ? displayVisible.filter(node => node.parentId === root.id) : [];
+    const tree = displayVisible.filter(n => n.parentId && byId.has(n.parentId)
+      && !['matrix', 'treemap', 'swimlane'].includes(map.layout)
+      && !(n.parentId === root?.id && (stages.length >= 2 || map.layout === 'fishbone' || map.layout === 'timeline'))).map(n => {
     const parent = byId.get(n.parentId!)!; const target = byId.get(n.id)!;
     const { sourceHandle, targetHandle } = map.layout === 'horizontal' && !parent.branchLayout
       ? { sourceHandle: 'source-right', targetHandle: 'target-left' }
@@ -51,7 +59,9 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
         ? { sourceHandle: 'source-bottom', targetHandle: 'target-top' }
         : alignedHandles(parent, target);
     const line = n.connectionStyle; const color = line?.color || '#b9b4db';
-    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label: map.layout === 'flowchart' && parent.flowDecision ? n.flowAnswer === 'yes' ? 'Sim' : n.flowAnswer === 'no' ? 'Não' : undefined : undefined, data: { line: { ...line, color } }, animated: false, style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) };
+    const label = map.layout === 'flowchart' && parent.flowDecision ? n.flowAnswer === 'yes' ? 'Sim' : n.flowAnswer === 'no' ? 'Não' : undefined
+      : map.layout === 'concept' ? n.conceptRelation || 'relaciona-se' : undefined;
+    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: { ...line, color } }, animated: false, style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) };
     });
     const cycle = stages.length < 2 ? [] : stages.map((stage, index) => {
       const target = stages[(index + 1) % stages.length];
@@ -77,20 +87,68 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
         type: 'styled', data: { line: { color, width: 2, curve: 'smooth' as const } },
         markerEnd: edgeMarker('arrow', color), style: { stroke: color, strokeWidth: 2 } };
     });
-    const relationships = (map.relationships || []).filter(link => byId.has(link.source) && byId.has(link.target)).map(link => { const line = link.style; const color = line?.color || '#41baa3'; const source = byId.get(link.source)!; const target = byId.get(link.target)!; const aligned = alignedHandles(source, target); const sourceHandle = link.sourceHandle || aligned.sourceHandle; const targetHandle = link.targetHandle || aligned.targetHandle; return { id: link.id, source: link.source, target: link.target, sourceHandle, targetHandle, type: 'styled', data: { line: { pattern: 'dashed' as const, ...line, color } }, label: link.label, style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) ?? '6 4' }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) }; });
-    return [...tree, ...cycle, ...relationships];
-  }, [visible, map.layout, map.relationships, livePositions]);
-  const annotations = useMemo(() => visible.filter(n => n.boundary || n.summary).map(node => {
+    const laneEdges = (() => {
+      if (map.layout !== 'swimlane' || !root) return [];
+      const byParent = new Map<string, MindNode[]>();
+      displayVisible.forEach(node => { if (node.parentId) { const children = byParent.get(node.parentId); if (children) children.push(node); else byParent.set(node.parentId, [node]); } });
+      return (byParent.get(root.id) || []).flatMap(lane => {
+        const steps: MindNode[] = [];
+        const pending = [lane];
+        while (pending.length) { const step = pending.pop()!; steps.push(step); pending.push(...(byParent.get(step.id) || [])); }
+        steps.sort((a, b) => a.y - b.y);
+        return steps.slice(1).map((step, index) => ({ id: `lane:${lane.id}:${step.id}`, source: steps[index].id, target: step.id,
+          sourceHandle: 'source-bottom', targetHandle: 'target-top', type: 'styled', data: { line: { color: '#8a7af0', width: 2 } },
+          markerEnd: edgeMarker('arrow', '#8a7af0'), style: { stroke: '#8a7af0', strokeWidth: 2 } }));
+      });
+    })();
+    const relationships = (map.relationships || []).filter(link => byId.has(link.source) && byId.has(link.target)).map(link => { const line = link.style; const color = line?.color || '#41baa3'; const source = byId.get(link.source)!; const target = byId.get(link.target)!; const aligned = alignedHandles(source, target); const sourceHandle = link.sourceHandle || aligned.sourceHandle; const targetHandle = link.targetHandle || aligned.targetHandle; return { id: link.id, source: link.source, target: link.target, sourceHandle, targetHandle, type: 'styled', data: { line: { pattern: 'dashed' as const, ...line, color } }, label: link.label || (map.layout === 'concept' ? 'relaciona-se' : undefined), style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) ?? '6 4' }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) }; });
+    return [...tree, ...cycle, ...laneEdges, ...relationships];
+  }, [displayVisible, map.layout, map.relationships, livePositions]);
+  const annotations = useMemo(() => map.layout === 'treemap' ? [] : visible.filter(n => n.boundary || n.summary).map(node => {
     const branchIds = descendants(map.nodes, node.id); const branch = visible.filter(item => branchIds.has(item.id));
     const x = Math.min(...branch.map(item => item.x)) - 28; const y = Math.min(...branch.map(item => item.y)) - 28;
     const right = Math.max(...branch.map(item => item.x + 230)) + 28; const bottom = Math.max(...branch.map(item => item.y + 85)) + 28;
     return { node, x, y, width: right - x, height: bottom - y };
-  }), [visible, map.nodes]);
+  }), [visible, map.nodes, map.layout]);
+  const diagramBackdrop = useMemo(() => {
+    const root = visible.find(node => !node.parentId && !node.floating);
+    if (!root) return null;
+    const branches = visible.filter(node => node.parentId === root.id);
+    if (map.layout === 'swimlane') {
+      const height = Math.max(300, ...visible.filter(node => node.parentId).map(node => node.y + 120));
+      return branches.map((branch, index) => <div key={branch.id} className="swimlane-backdrop" style={{ left: root.x + 250 + index * 300, top: root.y - 35, width: 280, height: height + 35 }}><span>{branch.text}</span></div>);
+    }
+    if (map.layout === 'matrix') {
+      const rows = root.matrixRows?.length ? root.matrixRows : ['Linha 1', 'Linha 2'];
+      const columns = root.matrixColumns?.length ? root.matrixColumns : ['Coluna 1', 'Coluna 2'];
+      const assigned = visible.filter(node => node.id !== root.id && !node.floating);
+      const counts = new Map<string, number>();
+      assigned.forEach((node, index) => {
+        const row = Math.min(rows.length - 1, node.matrixRow ?? Math.floor(index / columns.length) % rows.length);
+        const column = Math.min(columns.length - 1, node.matrixColumn ?? index % columns.length);
+        const key = `${row}:${column}`; counts.set(key, (counts.get(key) || 0) + 1);
+      });
+      const height = Math.max(180, ...[...counts.values()].map(count => count * 84 + 60));
+      const left = root.x + (root.width ?? 182) / 2 - columns.length * 280 / 2;
+      const top = root.y + 180;
+      return <>{columns.map((label, column) => <div key={`column-${column}`} className="matrix-axis matrix-column" style={{ left: left + column * 280, top: top - 35, width: 280 }}>{label}</div>)}
+        {rows.map((label, row) => <div key={`row-${row}`} className="matrix-axis matrix-row" style={{ left: left - 132, top: top + row * height + 8, height: height - 16 }}>{label}</div>)}
+        {rows.flatMap((_, row) => columns.map((_, column) => <div key={`${row}:${column}`} className="matrix-cell" style={{ left: left + column * 280, top: top + row * height, width: 280, height }}/>))}</>;
+    }
+    if (map.layout === 'fishbone' || map.layout === 'timeline') {
+      const rootSize = visualSize(root);
+      const axisY = root.y + rootSize.height / 2;
+      const startX = root.x + rootSize.width;
+      const endX = Math.max(startX + 160, ...branches.map(node => node.x + visualSize(node).width / 2 + 40));
+      return <svg className="diagram-axis" style={{ left: 0, top: 0 }} width="1" height="1" aria-hidden="true"><defs><marker id="diagram-axis-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#8a7af0"/></marker></defs><path d={`M ${startX} ${axisY} L ${endX} ${axisY}`} markerEnd="url(#diagram-axis-arrow)"/>{branches.map(node => { const size = visualSize(node); const x = node.x + size.width / 2; const y = node.y + (node.y < axisY ? size.height : 0); return <path key={node.id} d={`M ${x} ${axisY} L ${x} ${y}`}/>; })}</svg>;
+    }
+    return null;
+  }, [visible, map.layout]);
   const concentricRings = useMemo(() => {
     if (map.layout !== 'concentric') return [];
-    const root = visible.find(node => !node.parentId && !node.floating);
+    const root = displayVisible.find(node => !node.parentId && !node.floating);
     if (!root) return [];
-    const byId = new Map(visible.map(node => [node.id, node]));
+    const byId = new Map(displayVisible.map(node => [node.id, node]));
     const position = (node: MindNode) => livePositions.get(node.id) || node;
     const center = (node: MindNode) => { const size = visualSize(node); const point = position(node); return { x: point.x + size.width / 2, y: point.y + size.height / 2 }; };
     const origin = center(root);
@@ -107,7 +165,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
       const radius = Math.max(60, distance - 42);
       return { depth, x: origin.x - radius, y: origin.y - radius, diameter: radius * 2 };
     });
-  }, [visible, map.layout, livePositions]);
+  }, [visible, displayVisible, map.layout, livePositions]);
   const onNodesChange = useCallback((changes: NodeChange<Node>[]) => {
     if (readOnly) return;
     const selection = changes.filter(change => change.type === 'select');
@@ -181,7 +239,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     if (readOnly || !connection.source || !connection.target || connection.source === connection.target) return;
     // O gesto nos conectores cria uma relação livre sem alterar a árvore.
     if (map.relationships?.some(link => link.source === connection.source && link.target === connection.target && link.sourceHandle === connection.sourceHandle && link.targetHandle === connection.targetHandle)) return;
-    onChange({ ...map, relationships: [...(map.relationships || []), { id: crypto.randomUUID(), source: connection.source, target: connection.target, sourceHandle: connection.sourceHandle || undefined, targetHandle: connection.targetHandle || undefined }] });
+    onChange({ ...map, relationships: [...(map.relationships || []), { id: crypto.randomUUID(), source: connection.source, target: connection.target, sourceHandle: connection.sourceHandle || undefined, targetHandle: connection.targetHandle || undefined, label: map.layout === 'concept' ? 'relaciona-se' : undefined }] });
   }, [map, onChange, readOnly]);
   const onConnectEnd = useCallback((event: MouseEvent | TouchEvent, state: { isValid: boolean | null; fromNode: { id: string } | null; fromHandle: { id?: string | null } | null }) => {
     if (readOnly || state.isValid || !state.fromNode) return;
@@ -200,12 +258,12 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     const targetHandle = [...distances].sort((a, b) => a[1] - b[1])[0][0];
     const sourceHandle = state.fromHandle?.id || 'source-right';
     if (map.relationships?.some(link => link.source === state.fromNode!.id && link.target === targetId && link.sourceHandle === sourceHandle && link.targetHandle === targetHandle)) return;
-    onChange({ ...map, relationships: [...(map.relationships || []), { id: crypto.randomUUID(), source: state.fromNode.id, target: targetId, sourceHandle, targetHandle }] });
+    onChange({ ...map, relationships: [...(map.relationships || []), { id: crypto.randomUUID(), source: state.fromNode.id, target: targetId, sourceHandle, targetHandle, label: map.layout === 'concept' ? 'relaciona-se' : undefined }] });
   }, [map, onChange, readOnly]);
   return <div className="canvas-surface" onKeyDown={e => { const target = e.target as HTMLElement; if (e.code === 'Space' && !target.closest('input,textarea,select,[contenteditable="true"]')) { setSpaceHeld(true); e.preventDefault(); } }} onKeyUp={e => { if (e.code === 'Space') setSpaceHeld(false); }} onBlur={() => setSpaceHeld(false)} tabIndex={0}>
     <ReactFlow proOptions={{ hideAttribution: true }} autoPanOnNodeFocus={false} autoPanOnNodeDrag={false} panActivationKeyCode={null} nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onConnect={onConnect} onConnectEnd={onConnectEnd} onNodeClick={(event, node) => { setContextNodeId(null); if (!event.ctrlKey && !event.metaKey && !event.shiftKey) onSelect(node.id); }} onEdgeClick={(_event, edge) => { if (readOnly) return; if (map.relationships?.some(link => link.id === edge.id)) onSelectEdge?.(edge.id); else onSelect(edge.target); }} onNodeContextMenu={(event, node) => { if (readOnly) return; event.preventDefault(); setContextNodeId(node.id); onOpenQuick?.(node.id, 'movement'); }} onPaneClick={(event) => { if (event.ctrlKey || event.metaKey) return; setContextNodeId(null); onSelect(null); }} fitView fitViewOptions={{ padding: 0.3, maxZoom: 1 }} minZoom={0.18} maxZoom={2.5} panOnDrag={spaceHeld ? [0, 1, 2] : [1, 2]} zoomOnScroll zoomOnDoubleClick={false} selectionOnDrag={false} selectionKeyCode={readOnly ? null : ["Control", "Meta", "Shift"]} multiSelectionKeyCode={["Control", "Meta"]} selectionMode={SelectionMode.Partial} deleteKeyCode={null} nodeDragThreshold={3} nodesConnectable={!readOnly} connectionMode={ConnectionMode.Loose} nodesDraggable={!readOnly} elementsSelectable={!readOnly} connectionLineType={ConnectionLineType.SmoothStep}>
       {grid && <Background variant={BackgroundVariant.Dots} gap={22} size={1.1} color="#dadde9" />}
-      <ViewportPortal>{concentricRings.map(ring => <div key={`ring-${ring.depth}`} className="concentric-ring" style={{ left: ring.x, top: ring.y, width: ring.diameter, height: ring.diameter }}/>)}</ViewportPortal>
+      <ViewportPortal>{diagramBackdrop}{concentricRings.map(ring => <div key={`ring-${ring.depth}`} className="concentric-ring" style={{ left: ring.x, top: ring.y, width: ring.diameter, height: ring.diameter }}/>)}</ViewportPortal>
       <ViewportPortal>{annotations.map(({ node, x, y, width, height }) => <div key={node.id} className="branch-annotation" style={{ left: x, top: y, width, height }}>{node.boundary && <div className="branch-boundary"/>}{node.summary && <div className="branch-summary">{node.summary}</div>}</div>)}</ViewportPortal>
       <Controls position="bottom-left" showInteractive={false}/>
     </ReactFlow>

@@ -190,7 +190,7 @@ export function reorganizeBranch(map: MindMap, id: string, avoidOverlap = true, 
   const originals = new Map(map.nodes.map(node => [node.id, node]));
   const planned = layoutBranch(map.nodes.map(node => ids.has(node.id) ? { ...node, collapsed: false } : node), id, mode, map.spacing);
   const next = planned.map(node => { const original = originals.get(node.id)!; return node.positionLocked ? { ...node, x: original.x, y: original.y, collapsed: original.collapsed } : { ...node, collapsed: original.collapsed }; });
-  if (avoidOverlap && mode !== 'cycle' && mode !== 'concentric') {
+  if (avoidOverlap && !['cycle', 'concentric', 'radial', 'concept', 'matrix', 'swimlane', 'treemap'].includes(mode)) {
     const perpendicular = ['flowchart', 'vertical', 'down', 'up', 'org'].includes(mode) ? 'x' : 'y';
     const sign = mode === 'up' || mode === 'left' || mode === 'org-left' ? -1 : 1;
     const occupied = next.filter(node => !ids.has(node.id) || node.positionLocked || node.id === id);

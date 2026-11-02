@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { LayoutMode, MindNode } from '../types';
-import { autoLayout } from '../lib/maps';
+import { autoLayout, treemapRects } from '../lib/maps';
 
 export const layoutOptions: { mode: LayoutMode; label: string }[] = [
   { mode: 'radial', label: 'Radial' },
@@ -9,10 +9,14 @@ export const layoutOptions: { mode: LayoutMode; label: string }[] = [
   { mode: 'bilateral', label: 'Bilateral' },
   { mode: 'fishbone', label: 'Espinha de peixe' },
   { mode: 'flowchart', label: 'Fluxograma' },
-  { mode: 'timeline', label: 'Linha do tempo' },
-  { mode: 'network', label: 'Rede' },
+  { mode: 'swimlane', label: 'Raias' },
   { mode: 'cycle', label: 'Cíclico' },
+  { mode: 'concept', label: 'Mapa conceitual' },
+  { mode: 'network', label: 'Rede' },
+  { mode: 'matrix', label: 'Matriz' },
+  { mode: 'timeline', label: 'Linha do tempo' },
   { mode: 'concentric', label: 'Concêntrico' },
+  { mode: 'treemap', label: 'Treemap' },
 ];
 
 const sample: MindNode[] = [
@@ -38,6 +42,12 @@ function LayoutMini({ mode }: { mode: LayoutMode }) {
   const center = nodes.find(node => !node.parentId)!;
   const stages = nodes.filter(node => node.parentId === center.id);
   const rings = mode === 'concentric' ? [stages, nodes.filter(node => stages.some(parent => parent.id === node.parentId))].filter(level => level.length).map(level => Math.max(...level.map(node => Math.hypot(x(node) - x(center), y(node) - y(center))))) : [];
+  if (mode === 'treemap') {
+    const rects = treemapRects(sample);
+    return <svg className="layout-mini" viewBox="0 0 82 48" aria-hidden="true">{sample.filter(node => node.parentId).map(node => { const rect = rects.get(node.id)!; return <rect key={node.id} x={5 + rect.x * .06} y={5 + rect.y * .05} width={Math.max(2, rect.width * .06)} height={Math.max(2, rect.height * .05)} fill="none" stroke="currentColor"/>; })}</svg>;
+  }
+  if (mode === 'matrix') return <svg className="layout-mini" viewBox="0 0 82 48" aria-hidden="true">{[0, 1].flatMap(row => [0, 1].map(column => <rect key={`${row}:${column}`} x={8 + column * 32} y={4 + row * 20} width="31" height="19" fill="none" stroke="currentColor"/>))}</svg>;
+  if (mode === 'swimlane') return <svg className="layout-mini" viewBox="0 0 82 48" aria-hidden="true">{[0, 1, 2].map(lane => <g key={lane}><rect x={3 + lane * 26} y="2" width="24" height="44" fill="none" stroke="currentColor"/><rect x={9 + lane * 26} y="8" width="12" height="5" rx="1"/><rect x={9 + lane * 26} y="22" width="12" height="5" rx="1"/></g>)}</svg>;
   return <svg className="layout-mini" viewBox="0 0 82 48" aria-hidden="true">
     {rings.map((radius, index) => <circle key={index} cx={x(center)} cy={y(center)} r={radius} fill="none" stroke="currentColor" opacity=".45"/>)}
     {nodes.map(node => { const parent = node.parentId ? byId.get(node.parentId) : null; return parent && !(mode === 'cycle' && parent.id === center.id) ? <line key={`l-${node.id}`} x1={x(parent)} y1={y(parent)} x2={x(node)} y2={y(node)} /> : null; })}
@@ -47,7 +57,7 @@ function LayoutMini({ mode }: { mode: LayoutMode }) {
 }
 
 export default function LayoutPicker({ selected, onChoose, isRoot = false }: { selected: LayoutMode; onChoose: (mode: LayoutMode) => void; isRoot?: boolean }) {
-  return <div className="layout-picker" role="group" aria-label="Escolher layout do ramo">
-    {layoutOptions.filter(({ mode }) => isRoot || !['cycle', 'concentric', 'flowchart'].includes(mode)).map(({ mode, label }) => <button key={mode} type="button" className={selected === mode ? 'active' : ''} aria-label={label} aria-pressed={selected === mode} title={label} onClick={() => onChoose(mode)}><LayoutMini mode={mode}/><span>{label}</span></button>)}
+  return <div className="layout-picker" role="group" aria-label={isRoot ? 'Escolher layout do mapa' : 'Escolher layout do ramo'}>
+    {layoutOptions.filter(({ mode }) => isRoot || !['swimlane', 'cycle', 'concept', 'matrix', 'concentric', 'flowchart', 'treemap'].includes(mode)).map(({ mode, label }) => <button key={mode} type="button" className={selected === mode ? 'active' : ''} aria-label={label} aria-pressed={selected === mode} title={label} onClick={() => onChoose(mode)}><LayoutMini mode={mode}/><span>{label}</span></button>)}
   </div>;
 }

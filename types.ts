@@ -1,4 +1,4 @@
-export type LayoutMode = 'horizontal' | 'vertical' | 'bilateral' | 'radial' | 'fishbone' | 'timeline' | 'network' | 'cycle' | 'concentric' | 'flowchart' | 'right' | 'left' | 'balanced' | 'down' | 'up' | 'split-down' | 'org' | 'org-left' | 'fishbone-left' | 'timeline-left' | 'free';
+export type LayoutMode = 'horizontal' | 'vertical' | 'bilateral' | 'radial' | 'fishbone' | 'flowchart' | 'swimlane' | 'cycle' | 'concept' | 'network' | 'matrix' | 'timeline' | 'concentric' | 'treemap' | 'right' | 'left' | 'balanced' | 'down' | 'up' | 'split-down' | 'org' | 'org-left' | 'fishbone-left' | 'timeline-left' | 'free';
 export type MovementMode = 'individual' | 'hierarchical' | 'automatic';
 export type NodeShape = 'rounded' | 'rectangle' | 'pill' | 'ellipse' | 'circle' | 'diamond' | 'hexagon' | 'underline' | 'transparent' | 'tag-right' | 'tag-left' | 'arrow-right' | 'arrow-left' | 'arrow-up' | 'arrow-down' | 'bookmark-right' | 'bookmark-left' | 'half-rounded-right' | 'half-rounded-left';
 export type RichRun = { text: string; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; highlight?: string };
@@ -9,6 +9,9 @@ export type MindNode = {
   id: string; parentId: string | null; text: string; x: number; y: number;
   side?: 'left' | 'right'; branchLayout?: LayoutMode; collapsed?: boolean; note?: string; url?: string;
   flowDecision?: boolean; flowAnswer?: 'yes' | 'no';
+  conceptRelation?: string; timelineDate?: string; treemapValue?: number;
+  matrixRows?: string[]; matrixColumns?: string[]; matrixRow?: number; matrixColumn?: number;
+  radialStartAngle?: number; radialRadius?: number;
   icon?: string; shape?: NodeShape; background?: string; border?: string; color?: string;
   image?: string; comments?: NodeComment[]; task?: { done: boolean; priority?: 'p0' | 'p1' | 'p2' | 'p3' | 'p4' | 'low' | 'medium' | 'high'; progress?: number; start?: string; duration?: number; due?: string; assignee?: string };
   mediaUrl?: string; mediaType?: 'video' | 'audio'; label?: string; equation?: string; floating?: boolean; boundary?: boolean; summary?: string;

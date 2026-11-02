@@ -4,7 +4,7 @@ import ts from 'typescript';
 
 const source = await readFile('lib/maps.ts', 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { autoLayout } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const { autoLayout, treemapRects } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 
 const root = { id: 'root', parentId: null, text: 'Centro', x: 0, y: 0 };
 const stages = Array.from({ length: 4 }, (_, index) => ({ id: `stage-${index}`, parentId: root.id, text: `Etapa ${index}`, x: 0, y: 0 }));
@@ -38,4 +38,23 @@ assert.ok(flow[2].x < flow[1].x, 'Yes path stays left of No regardless of input 
 assert.equal(flow[1].y, flow[2].y, 'Decision alternatives share a level');
 assert.ok(flow[1].y > flow[0].y, 'Flow advances downward');
 assert.deepEqual(flow[3], floating);
-console.log('Diagramas: ciclo, anéis, fluxograma Sim/Não, nós flutuantes e ramos recolhidos OK.');
+
+const lanes = autoLayout(original, 'swimlane');
+assert.ok(lanes[1].x < lanes[2].x && lanes[2].x < lanes[3].x, 'Main branches define ordered lanes');
+assert.ok(lanes[5].x >= lanes[1].x && lanes[5].x < lanes[2].x, 'Descendant stays in its lane');
+assert.ok(lanes[5].y > lanes[1].y);
+
+const matrixRoot = { ...root, matrixRows: ['Baixo', 'Alto'], matrixColumns: ['Urgente', 'Depois'] };
+const matrix = autoLayout([matrixRoot, { ...stages[0], matrixRow: 1, matrixColumn: 0 }, { ...stages[1], matrixRow: 0, matrixColumn: 1 }], 'matrix');
+assert.ok(matrix[1].y > matrix[2].y && matrix[1].x < matrix[2].x, 'Row and column assignments determine cells');
+assert.equal(matrix[0].x, 0, 'Matrix root remains anchored');
+
+const blocks = treemapRects([root, { ...stages[0], treemapValue: 3 }, { ...stages[1], treemapValue: 1 }, { ...children[0], treemapValue: 2 }]);
+assert.ok(Math.abs(blocks.get(stages[0].id).width / blocks.get(stages[1].id).width - 3) < .01, 'Treemap area follows editable values');
+assert.ok(blocks.get(children[0].id).x > blocks.get(stages[0].id).x, 'Nested blocks remain inside their category');
+
+const chronological = autoLayout([root, { ...stages[0], timelineDate: '2028-01-01' }, { ...stages[1], timelineDate: '2026-01-01' }], 'timeline');
+assert.ok(chronological[2].x < chronological[1].x, 'Earlier milestones precede later ones');
+const rotated = autoLayout([{ ...root, radialStartAngle: 90, radialRadius: 420 }, stages[0]], 'radial');
+assert.ok(Math.abs(rotated[1].x) < 1 && rotated[1].y > 250, 'Radial angle and radius affect position');
+console.log('Diagramas: ciclo, anéis, fluxograma, raias, matriz, treemap, linha do tempo e radial OK.');

@@ -253,8 +253,23 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
   const editNode = useCallback((id: string, text: string) => { if (active) commit({ ...active, nodes: active.nodes.map(n => n.id === id ? { ...n, text } : n) }); }, [active, commit]);
   const patchNodeById = (id: string, patch: Partial<MindNode>) => {
     if (!active) return;
-    const next = patchVisualNodes(active, [id], patch, collectNodeDimensions());
-    if (active.layout === 'flowchart' && ('flowAnswer' in patch || 'flowDecision' in patch)) {
+    let next = patchVisualNodes(active, [id], patch, collectNodeDimensions());
+    if (active.layout === 'matrix' && ('matrixRows' in patch || 'matrixColumns' in patch)) {
+      const root = next.nodes.find(node => !node.parentId && !node.floating);
+      if (root) {
+        const rowLimit = (root.matrixRows?.length || 2) - 1;
+        const columnLimit = (root.matrixColumns?.length || 2) - 1;
+        next = { ...next, nodes: next.nodes.map(node => node.id === root.id ? node : {
+          ...node, matrixRow: node.matrixRow === undefined ? undefined : Math.min(node.matrixRow, rowLimit),
+          matrixColumn: node.matrixColumn === undefined ? undefined : Math.min(node.matrixColumn, columnLimit),
+        }) };
+      }
+    }
+    const fields = active.layout === 'flowchart' ? ['flowAnswer', 'flowDecision']
+      : active.layout === 'matrix' ? ['matrixRows', 'matrixColumns', 'matrixRow', 'matrixColumn']
+      : active.layout === 'timeline' ? ['timelineDate']
+      : active.layout === 'radial' ? ['radialStartAngle', 'radialRadius'] : [];
+    if (fields.some(field => field in patch)) {
       const root = next.nodes.find(node => !node.parentId && !node.floating);
       commit(root ? reorganizeBranch(next, root.id, next.avoidOverlap ?? globalAvoidOverlap, collectNodeDimensions()) : next);
     } else commit(next);
@@ -285,7 +300,7 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
   const toggleNode = useCallback((id: string) => { if (active) commit({ ...active, nodes: active.nodes.map(n => n.id === id ? { ...n, collapsed: !n.collapsed } : n) }); }, [active, commit]);
   const applyLayout = (mode: LayoutMode) => {
     if (!active) return;
-    if (mode === 'free' || mode === 'network') { commit({ ...active, layout: mode }); return; }
+    if (mode === 'free' || mode === 'network' || mode === 'treemap') { commit({ ...active, layout: mode }); return; }
     const root = active.nodes.find(node => !node.parentId && !node.floating);
     if (!root) return;
     commit(applySiblingAlignments(reorganizeBranch({ ...active, layout: mode }, root.id, active.avoidOverlap ?? globalAvoidOverlap, collectNodeDimensions())));
@@ -457,7 +472,7 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
   const deleteRelationship = () => { if (active && selectedEdgeId) { commit({ ...active, relationships: active.relationships?.filter(link => link.id !== selectedEdgeId) }); setSelectedEdgeId(null); } };
   const selectCanvasNode = (id: string | null) => {
     setSelectedEdgeId(null);
-    if (relationSourceId && active && id && id !== relationSourceId) { commit({ ...active, relationships: [...(active.relationships || []), { id: uid(), source: relationSourceId, target: id }] }); setRelationSourceId(null); selectMany([id]); return; }
+    if (relationSourceId && active && id && id !== relationSourceId) { commit({ ...active, relationships: [...(active.relationships || []), { id: uid(), source: relationSourceId, target: id, label: active.layout === 'concept' ? 'relaciona-se' : undefined }] }); setRelationSourceId(null); selectMany([id]); return; }
     if (!id) setRelationSourceId(null); selectMany(id ? [id] : []);
   };
   const selectCanvasEdge = (id: string) => { selectMany([]); setSelectedEdgeId(id); };

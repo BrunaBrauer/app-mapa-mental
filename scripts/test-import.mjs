@@ -53,6 +53,10 @@ assert.throws(() => parseMapFile(JSON.stringify({ ...copy, levelStyles: [{ depth
 assert.equal(validMap(copy), true);
 assert.equal(validMap({ ...copy, layout: 'cycle' }), true);
 assert.equal(validMap({ ...copy, layout: 'concentric' }), true);
+for (const layout of ['swimlane', 'concept', 'matrix', 'treemap']) assert.equal(validMap({ ...copy, layout }), true);
+assert.equal(validMap({ ...copy, layout: 'matrix', nodes: [{ ...copy.nodes[0], matrixRows: ['Impacto', 'Esforço'], matrixColumns: ['Baixo', 'Alto'] }, ...copy.nodes.slice(1)] }), true);
+assert.equal(validMap({ ...copy, layout: 'treemap', nodes: [copy.nodes[0], { ...copy.nodes[1], treemapValue: 2.5 }] }), true);
+assert.equal(validMap({ ...copy, nodes: [copy.nodes[0], { ...copy.nodes[1], treemapValue: -1 }] }), false);
 const flowchart = { ...copy, layout: 'flowchart', nodes: copy.nodes.map((node, index) => index ? { ...node, flowAnswer: 'yes' } : { ...node, flowDecision: true }) };
 assert.equal(validMap(flowchart), true);
 assert.equal(parseMapFile(JSON.stringify(flowchart), 'fluxograma.json').map.nodes[1].flowAnswer, 'yes');

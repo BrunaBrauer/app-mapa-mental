@@ -23,7 +23,8 @@ export function createTemplate(kind: TemplateKey): MindMap {
 
 // Each visible leaf receives a row; parents are centered above their descendants.
 export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 260, y: 112 }): MindNode[] {
-  const next = nodes.map(n => ({ ...n })); if (mode === 'free' || mode === 'network' || !next.length) return next;
+  const next = nodes.map(n => ({ ...n })); if (mode === 'free' || mode === 'network' || mode === 'treemap' || !next.length) return next;
+  if (mode === 'concept') return autoLayout(next, 'radial', spacing);
   if (mode === 'horizontal') {
     const placed = autoLayout(next, 'right', spacing);
     const byId = new Map(placed.map(node => [node.id, node]));
@@ -38,12 +39,51 @@ export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 2
   if (mode === 'vertical' || flowchart) mode = 'down';
   if (mode === 'bilateral') mode = 'balanced';
   const root = next.find(n => !n.parentId && !n.floating) ?? next[0]; root.x = 0; root.y = 0;
+  const byParent = new Map<string, MindNode[]>();
+  next.forEach(node => { if (node.parentId) { const siblings = byParent.get(node.parentId); if (siblings) siblings.push(node); else byParent.set(node.parentId, [node]); } });
   const kids = (id: string) => {
-    const children = next.filter(n => n.parentId === id);
+    const children = [...(byParent.get(id) || [])];
     const order = (node: MindNode) => node.flowAnswer === 'yes' ? 0 : node.flowAnswer === 'no' ? 1 : 2;
     return flowchart ? children.sort((a, b) => order(a) - order(b)) : children;
   };
   const branches = kids(root.id);
+  if (mode === 'timeline') branches.sort((a, b) => (a.timelineDate || '9999-12-31').localeCompare(b.timelineDate || '9999-12-31'));
+  if (mode === 'swimlane') {
+    root.x = 0; root.y = 0;
+    branches.forEach((branch, lane) => {
+      const seen = new Set<string>(); let row = 0;
+      branch.x = 250 + lane * 300 + 36; branch.y = 12;
+      const place = (parent: MindNode, depth: number) => {
+        if (seen.has(parent.id)) return;
+        seen.add(parent.id);
+        if (parent !== branch) { parent.x = 250 + lane * 300 + 36 + Math.min(depth - 1, 3) * 12; parent.y = 150 + row++ * 130; }
+        if (!parent.collapsed) kids(parent.id).forEach(child => place(child, depth + 1));
+      };
+      place(branch, 0);
+    });
+    return next;
+  }
+  if (mode === 'matrix') {
+    const rows = root.matrixRows?.length || 2;
+    const columns = root.matrixColumns?.length || 2;
+    const assigned = next.filter(node => node.id !== root.id && !node.floating);
+    const cells = new Map<string, MindNode[]>();
+    assigned.forEach((node, index) => {
+      const row = Math.min(rows - 1, node.matrixRow ?? Math.floor(index / columns) % rows);
+      const column = Math.min(columns - 1, node.matrixColumn ?? index % columns);
+      const key = `${row}:${column}`;
+      const cell = cells.get(key);
+      if (cell) cell.push(node); else cells.set(key, [node]);
+    });
+    const cellHeight = Math.max(180, ...[...cells.values()].map(cell => cell.length * 84 + 60));
+    root.x = 0; root.y = 0;
+    const gridLeft = (root.width ?? 182) / 2 - columns * 280 / 2;
+    cells.forEach((items, key) => {
+      const [row, column] = key.split(':').map(Number);
+      items.forEach((node, index) => { node.x = gridLeft + column * 280 + 30; node.y = 180 + row * cellHeight + 48 + index * 84; });
+    });
+    return next;
+  }
   if (mode === 'cycle' || mode === 'concentric') {
     const levels: MindNode[][] = [];
     const seen = new Set([root.id]);
@@ -123,8 +163,10 @@ export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 2
       if (seen.has(node.id)) return;
       seen.add(node.id);
       const angle = start + span / 2;
-      node.x = Math.cos(angle) * depth * spacing.x;
-      node.y = Math.sin(angle) * depth * Math.max(150, spacing.y * 1.55);
+      const radius = root.radialRadius ?? spacing.x;
+      const rotation = (root.radialStartAngle ?? 0) * Math.PI / 180;
+      node.x = Math.cos(angle + rotation) * depth * radius;
+      node.y = Math.sin(angle + rotation) * depth * Math.max(150, radius * .7);
       let cursor = start;
       (node.collapsed ? [] : kids(node.id)).forEach(child => { const part = span * (weights.get(child.id) || 1) / (weights.get(node.id) || 1); place(child, depth + 1, cursor, part); cursor += part; });
     };
@@ -218,6 +260,33 @@ export function descendants(nodes: MindNode[], id: string): Set<string> {
 export function visibleNodes(nodes: MindNode[]): MindNode[] {
   const byId = new Map(nodes.map(n => [n.id, n]));
   return nodes.filter(n => { let parent = n.parentId; const seen = new Set<string>(); while (parent) { if (seen.has(parent)) return false; seen.add(parent); const p = byId.get(parent); if (!p || p.collapsed) return false; parent = p.parentId; } return true; });
+}
+export function treemapRects(nodes: MindNode[]): Map<string, { x: number; y: number; width: number; height: number; depth: number }> {
+  const visible = visibleNodes(nodes);
+  const root = visible.find(node => !node.parentId && !node.floating);
+  const rects = new Map<string, { x: number; y: number; width: number; height: number; depth: number }>();
+  if (!root) return rects;
+  rects.set(root.id, { x: 440, y: -128, width: 320, height: 76, depth: 0 });
+  const byParent = new Map<string, MindNode[]>();
+  visible.forEach(node => { if (node.parentId) { const siblings = byParent.get(node.parentId); if (siblings) siblings.push(node); else byParent.set(node.parentId, [node]); } });
+  const children = (id: string) => byParent.get(id) || [];
+  const place = (siblings: MindNode[], x: number, y: number, width: number, height: number, depth: number) => {
+    const total = siblings.reduce((sum, node) => sum + (node.treemapValue ?? 1), 0);
+    let offset = 0;
+    siblings.forEach((node, index) => {
+      const fraction = index === siblings.length - 1 ? 1 - offset : (node.treemapValue ?? 1) / total;
+      const horizontal = depth % 2 === 1;
+      const rect = horizontal
+        ? { x: x + width * offset, y, width: width * fraction, height, depth }
+        : { x, y: y + height * offset, width, height: height * fraction, depth };
+      rects.set(node.id, rect);
+      offset += fraction;
+      const nested = children(node.id);
+      if (nested.length) place(nested, rect.x + 6, rect.y + 46, Math.max(0, rect.width - 12), Math.max(0, rect.height - 52), depth + 1);
+    });
+  };
+  place(children(root.id), 0, 0, 1200, 720, 1);
+  return rects;
 }
 export function toMarkdown(map: MindMap): string {
   const lines = [`# ${map.title}`, '']; const root = map.nodes.find(n => !n.parentId);
