@@ -61,7 +61,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     const line = n.connectionStyle; const color = line?.color || '#b9b4db';
     const label = map.layout === 'flowchart' && parent.flowDecision ? n.flowAnswer === 'yes' ? 'Sim' : n.flowAnswer === 'no' ? 'Não' : undefined
       : map.layout === 'concept' ? n.conceptRelation || 'relaciona-se' : undefined;
-    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: { ...line, color } }, animated: false, style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) };
+    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: { ...line, color }, route: map.layout === 'horizontal' ? 'horizontal-tree' as const : undefined }, animated: false, style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) };
     });
     const cycle = stages.length < 2 ? [] : stages.map((stage, index) => {
       const target = stages[(index + 1) % stages.length];

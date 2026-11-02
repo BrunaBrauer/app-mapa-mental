@@ -14,6 +14,10 @@ const original = [root, ...stages, ...children, floating];
 const center = { x: 91, y: 36 };
 const distance = node => Math.hypot(node.x + 80 - center.x, node.y + 32 - center.y);
 
+const horizontal = autoLayout(original, 'horizontal');
+assert.ok(horizontal.slice(1, 5).every(node => node.x === horizontal[1].x), 'Siblings in one level share a column');
+assert.ok(horizontal.slice(5, 7).every(node => node.x > horizontal[1].x), 'Descendants advance to the next column');
+
 const cycle = autoLayout(original, 'cycle');
 assert.deepEqual(cycle.map(node => node.id), original.map(node => node.id));
 assert.deepEqual(cycle.at(-1), floating);
