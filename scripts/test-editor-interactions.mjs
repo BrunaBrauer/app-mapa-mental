@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
 
 const [editor, canvas, nodeView, richText, movementSettings, css] = await Promise.all([
   readFile('components/Editor.tsx', 'utf8'),
@@ -23,5 +24,11 @@ assert.match(movementSettings, /checked=\{Boolean\(map\.siblingReorder\)\}/, 'Th
 for (const side of ['left', 'right', 'top', 'bottom']) assert.match(nodeView, new RegExp(`type="target" id="target-${side}"`), `Tree edges need a registered ${side} target handle`);
 assert.match(canvas, /map\.layout === 'horizontal'[\s\S]*?sourceHandle: 'source-right', targetHandle: 'target-left'/, 'Every horizontal tree edge starts at the right side');
 assert.match(canvas, /map\.layout === 'vertical' \|\| map\.layout === 'flowchart'[\s\S]*?sourceHandle: 'source-bottom', targetHandle: 'target-top'/, 'Every vertical tree edge starts at the bottom');
+
+const richCode = ts.transpileModule(await readFile('lib/rich-text.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { richTextHtml } = await import(`data:text/javascript;base64,${Buffer.from(richCode).toString('base64')}`);
+const colored = richTextHtml('texto', [{ text: 'texto', color: '#123456', highlight: '#ffff00', bold: true }]);
+assert.match(colored, /<mark style="background-color:#ffff00"><span style="color:#123456"><strong>texto<\/strong><\/span><\/mark>/);
+assert.doesNotMatch(richTextHtml('x', [{ text: '<script>', color: 'red" onmouseover="evil' }]), /<script>|onmouseover/);
 
 console.log('Interações do editor: Backspace seguro, espaços editáveis, cursor visível, arraste e conexões alinhadas OK.');

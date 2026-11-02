@@ -299,6 +299,7 @@ export function toMarkdown(map: MindMap): string {
       if (run.italic) value = `<em>${value}</em>`;
       if (run.underline) value = `<u>${value}</u>`;
       if (run.strike) value = `<s>${value}</s>`;
+      if (run.color && /^#[0-9a-f]{6}$/i.test(run.color)) value = `<span style="color:${run.color}">${value}</span>`;
       if (run.highlight && /^#[0-9a-f]{6}$/i.test(run.highlight)) value = `<mark style="background-color:${run.highlight}">${value}</mark>`;
       return value;
     }).join('');

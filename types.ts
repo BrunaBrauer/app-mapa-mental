@@ -1,9 +1,9 @@
 export type LayoutMode = 'horizontal' | 'vertical' | 'bilateral' | 'radial' | 'fishbone' | 'flowchart' | 'swimlane' | 'cycle' | 'concept' | 'network' | 'matrix' | 'timeline' | 'concentric' | 'treemap' | 'right' | 'left' | 'balanced' | 'down' | 'up' | 'split-down' | 'org' | 'org-left' | 'fishbone-left' | 'timeline-left' | 'free';
 export type MovementMode = 'individual' | 'hierarchical' | 'automatic';
 export type NodeShape = 'rounded' | 'rectangle' | 'pill' | 'ellipse' | 'circle' | 'diamond' | 'hexagon' | 'underline' | 'transparent' | 'tag-right' | 'tag-left' | 'arrow-right' | 'arrow-left' | 'arrow-up' | 'arrow-down' | 'bookmark-right' | 'bookmark-left' | 'half-rounded-right' | 'half-rounded-left';
-export type RichRun = { text: string; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; highlight?: string };
+export type RichRun = { text: string; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; highlight?: string; color?: string };
 export type LineStyle = { color?: string; width?: number; pattern?: 'solid' | 'dashed' | 'dotted' | 'double'; curve?: 'smooth' | 'straight' | 'step' | 'rounded'; start?: 'none' | 'arrow' | 'circle' | 'diamond' | 'square' | 'bar' | 'hollow-circle'; end?: 'none' | 'arrow' | 'circle' | 'diamond' | 'square' | 'bar' | 'hollow-circle' };
-export type NodeStyle = Pick<MindNode, 'background' | 'border' | 'color' | 'shape' | 'icon' | 'fontSize' | 'fontFamily' | 'lineSpacing' | 'bold' | 'italic' | 'underline' | 'strike' | 'textAlign' | 'textVerticalAlign' | 'wrapText' | 'textTransform' | 'width' | 'height' | 'minWidth' | 'maxWidth' | 'minHeight' | 'maxHeight' | 'padding' | 'paddingTop' | 'paddingRight' | 'paddingBottom' | 'paddingLeft' | 'cornerRadius' | 'borderWidth' | 'borderStyle'>;
+export type NodeStyle = Pick<MindNode, 'background' | 'border' | 'color' | 'shape' | 'icon' | 'fontSize' | 'fontFamily' | 'lineSpacing' | 'letterSpacing' | 'bold' | 'italic' | 'underline' | 'strike' | 'textAlign' | 'textVerticalAlign' | 'wrapText' | 'textTransform' | 'width' | 'height' | 'minWidth' | 'maxWidth' | 'minHeight' | 'maxHeight' | 'padding' | 'paddingTop' | 'paddingRight' | 'paddingBottom' | 'paddingLeft' | 'cornerRadius' | 'borderWidth' | 'borderStyle'>;
 export type NodeComment = { id: string; text: string; createdAt: number };
 export type MindNode = {
   id: string; parentId: string | null; text: string; x: number; y: number;
@@ -15,14 +15,14 @@ export type MindNode = {
   icon?: string; shape?: NodeShape; background?: string; border?: string; color?: string;
   image?: string; comments?: NodeComment[]; task?: { done: boolean; priority?: 'p0' | 'p1' | 'p2' | 'p3' | 'p4' | 'low' | 'medium' | 'high'; progress?: number; start?: string; duration?: number; due?: string; assignee?: string };
   mediaUrl?: string; mediaType?: 'video' | 'audio'; label?: string; equation?: string; floating?: boolean; boundary?: boolean; summary?: string;
-  fontSize?: number; fontFamily?: string; lineSpacing?: number; bold?: boolean; italic?: boolean; richText?: RichRun[];
+  fontSize?: number; fontFamily?: string; lineSpacing?: number; letterSpacing?: number; bold?: boolean; italic?: boolean; richText?: RichRun[];
   width?: number; height?: number; minWidth?: number; maxWidth?: number; minHeight?: number; maxHeight?: number; padding?: number; borderWidth?: number; borderStyle?: 'solid' | 'dashed' | 'dotted' | 'double'; connectionStyle?: LineStyle;
   paddingTop?: number; paddingRight?: number; paddingBottom?: number; paddingLeft?: number; cornerRadius?: number;
   textVerticalAlign?: 'top' | 'center' | 'bottom'; wrapText?: boolean;
   sizeMode?: 'auto' | 'uniform' | 'custom'; sizeLocked?: boolean; lockAspectRatio?: boolean;
   childAlignment?: 'left' | 'center' | 'right'; styleOverrides?: (keyof NodeStyle)[];
   movementMode?: MovementMode; inheritMovement?: boolean; inheritMovementToChildren?: boolean; positionLocked?: boolean; avoidOverlap?: boolean;
-  underline?: boolean; strike?: boolean; textAlign?: 'left' | 'center' | 'right';
+  underline?: boolean; strike?: boolean; textAlign?: 'left' | 'center' | 'right' | 'justify';
   textTransform?: 'none' | 'uppercase' | 'lowercase';
 };
 export type MindMap = { id: string; title: string; nodes: MindNode[]; layout: LayoutMode; updatedAt: number; shareToken?: string | null; movementMode?: MovementMode; avoidOverlap?: boolean; siblingReorder?: boolean; relationships?: { id: string; source: string; target: string; sourceHandle?: string; targetHandle?: string; label?: string; style?: LineStyle }[]; favoriteIcons?: string[]; spacing?: { x: number; y: number }; defaultNodeStyle?: Partial<NodeStyle>; stylePresets?: { id: string; name: string; style: Partial<NodeStyle> }[]; levelReferences?: { parentId: string | null; mode: 'size' | 'format' | 'both'; style: Partial<NodeStyle> }[]; levelStyles?: { depth: number; style: Partial<NodeStyle>; autoWidth?: boolean; autoHeight?: boolean; repeatAfter?: boolean }[]; levelConnections?: { parentId: string; style: LineStyle }[] };

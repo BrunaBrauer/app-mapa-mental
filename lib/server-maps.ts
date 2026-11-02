@@ -15,7 +15,7 @@ const date = /^\d{4}-\d{2}-\d{2}$/;
 const layouts: LayoutMode[] = ['horizontal', 'vertical', 'bilateral', 'radial', 'fishbone', 'flowchart', 'swimlane', 'cycle', 'concept', 'network', 'matrix', 'timeline', 'concentric', 'treemap', 'right', 'left', 'balanced', 'down', 'up', 'split-down', 'org', 'org-left', 'fishbone-left', 'timeline-left', 'free'];
 const movements: MovementMode[] = ['individual', 'hierarchical', 'automatic'];
 const shapes: NodeShape[] = ['rounded', 'rectangle', 'pill', 'ellipse', 'circle', 'diamond', 'hexagon', 'underline', 'transparent', 'tag-right', 'tag-left', 'arrow-right', 'arrow-left', 'arrow-up', 'arrow-down', 'bookmark-right', 'bookmark-left', 'half-rounded-right', 'half-rounded-left'];
-const styleKeys: (keyof NodeStyle)[] = ['background', 'border', 'color', 'shape', 'icon', 'fontSize', 'fontFamily', 'lineSpacing', 'bold', 'italic', 'underline', 'strike', 'textAlign', 'textVerticalAlign', 'wrapText', 'textTransform', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'cornerRadius', 'borderWidth', 'borderStyle'];
+const styleKeys: (keyof NodeStyle)[] = ['background', 'border', 'color', 'shape', 'icon', 'fontSize', 'fontFamily', 'lineSpacing', 'letterSpacing', 'bold', 'italic', 'underline', 'strike', 'textAlign', 'textVerticalAlign', 'wrapText', 'textTransform', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'cornerRadius', 'borderWidth', 'borderStyle'];
 const styleKeySet = new Set<string>(styleKeys);
 
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -60,9 +60,10 @@ function validStyle(value: unknown): boolean {
     && optionalText(value.icon, 24)
     && optionalFinite(value.fontSize, 6, 200)
     && optionalFinite(value.lineSpacing, 1, 2.5)
+    && optionalFinite(value.letterSpacing, -2, 12)
     && optionalText(value.fontFamily, 200)
     && ['bold', 'italic', 'underline', 'strike', 'wrapText'].every(key => optionalBoolean(value[key]))
-    && optionalOneOf(value.textAlign, ['left', 'center', 'right'])
+    && optionalOneOf(value.textAlign, ['left', 'center', 'right', 'justify'])
     && optionalOneOf(value.textVerticalAlign, ['top', 'center', 'bottom'])
     && optionalOneOf(value.textTransform, ['none', 'uppercase', 'lowercase'])
     && optionalFinite(value.width, 80, 800)
@@ -83,7 +84,8 @@ function validRichText(value: unknown): boolean {
     && value.every(run => record(run)
     && text(run.text, 1000)
     && ['bold', 'italic', 'underline', 'strike'].every(key => optionalBoolean(run[key]))
-    && (run.highlight === undefined || typeof run.highlight === 'string' && /^#[0-9a-f]{6}$/i.test(run.highlight)));
+    && (run.highlight === undefined || typeof run.highlight === 'string' && /^#[0-9a-f]{6}$/i.test(run.highlight))
+    && (run.color === undefined || typeof run.color === 'string' && /^#[0-9a-f]{6}$/i.test(run.color)));
 }
 
 function validNode(node: unknown): node is MindNode {
@@ -98,7 +100,7 @@ function validNode(node: unknown): node is MindNode {
   if (node.matrixRow !== undefined && (!Number.isInteger(node.matrixRow) || !finite(node.matrixRow, 0, 11))) return false;
   if (node.matrixColumn !== undefined && (!Number.isInteger(node.matrixColumn) || !finite(node.matrixColumn, 0, 11))) return false;
   if (!optionalOneOf(node.movementMode, movements) || !optionalOneOf(node.childAlignment, ['left', 'center', 'right']) || !optionalOneOf(node.sizeMode, ['auto', 'uniform', 'custom'])) return false;
-  if (!optionalOneOf(node.textAlign, ['left', 'center', 'right']) || !optionalOneOf(node.textVerticalAlign, ['top', 'center', 'bottom']) || !optionalOneOf(node.textTransform, ['none', 'uppercase', 'lowercase'])) return false;
+  if (!optionalOneOf(node.textAlign, ['left', 'center', 'right', 'justify']) || !optionalOneOf(node.textVerticalAlign, ['top', 'center', 'bottom']) || !optionalOneOf(node.textTransform, ['none', 'uppercase', 'lowercase'])) return false;
   if (!['collapsed', 'floating', 'boundary', 'bold', 'italic', 'underline', 'strike', 'positionLocked', 'inheritMovement', 'inheritMovementToChildren', 'avoidOverlap', 'sizeLocked', 'lockAspectRatio', 'wrapText', 'flowDecision'].every(key => optionalBoolean(node[key]))) return false;
   if (!['note', 'summary'].every(key => optionalText(node[key], 100_000)) || !optionalText(node.label, 1000) || !optionalText(node.equation, 10_000) || !optionalText(node.icon, 24) || !optionalText(node.fontFamily, 200)) return false;
   if (!validWebUrl(node.url) || !validWebUrl(node.mediaUrl) || !validImage(node.image) || !validStyle(node)) return false;
