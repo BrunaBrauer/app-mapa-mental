@@ -3,7 +3,7 @@ export type MovementMode = 'individual' | 'hierarchical' | 'automatic';
 export type NodeShape = 'rounded' | 'rectangle' | 'pill' | 'ellipse' | 'circle' | 'diamond' | 'hexagon' | 'underline' | 'transparent' | 'tag-right' | 'tag-left' | 'arrow-right' | 'arrow-left' | 'arrow-up' | 'arrow-down' | 'bookmark-right' | 'bookmark-left' | 'half-rounded-right' | 'half-rounded-left';
 export type RichRun = { text: string; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; highlight?: string };
 export type LineStyle = { color?: string; width?: number; pattern?: 'solid' | 'dashed' | 'dotted' | 'double'; curve?: 'smooth' | 'straight' | 'step' | 'rounded'; start?: 'none' | 'arrow' | 'circle' | 'diamond' | 'square' | 'bar' | 'hollow-circle'; end?: 'none' | 'arrow' | 'circle' | 'diamond' | 'square' | 'bar' | 'hollow-circle' };
-export type NodeStyle = Pick<MindNode, 'background' | 'border' | 'color' | 'shape' | 'icon' | 'fontSize' | 'fontFamily' | 'bold' | 'italic' | 'underline' | 'strike' | 'textAlign' | 'textVerticalAlign' | 'wrapText' | 'textTransform' | 'width' | 'height' | 'minWidth' | 'maxWidth' | 'minHeight' | 'maxHeight' | 'padding' | 'paddingTop' | 'paddingRight' | 'paddingBottom' | 'paddingLeft' | 'cornerRadius' | 'borderWidth' | 'borderStyle'>;
+export type NodeStyle = Pick<MindNode, 'background' | 'border' | 'color' | 'shape' | 'icon' | 'fontSize' | 'fontFamily' | 'lineSpacing' | 'bold' | 'italic' | 'underline' | 'strike' | 'textAlign' | 'textVerticalAlign' | 'wrapText' | 'textTransform' | 'width' | 'height' | 'minWidth' | 'maxWidth' | 'minHeight' | 'maxHeight' | 'padding' | 'paddingTop' | 'paddingRight' | 'paddingBottom' | 'paddingLeft' | 'cornerRadius' | 'borderWidth' | 'borderStyle'>;
 export type NodeComment = { id: string; text: string; createdAt: number };
 export type MindNode = {
   id: string; parentId: string | null; text: string; x: number; y: number;
@@ -15,7 +15,7 @@ export type MindNode = {
   icon?: string; shape?: NodeShape; background?: string; border?: string; color?: string;
   image?: string; comments?: NodeComment[]; task?: { done: boolean; priority?: 'p0' | 'p1' | 'p2' | 'p3' | 'p4' | 'low' | 'medium' | 'high'; progress?: number; start?: string; duration?: number; due?: string; assignee?: string };
   mediaUrl?: string; mediaType?: 'video' | 'audio'; label?: string; equation?: string; floating?: boolean; boundary?: boolean; summary?: string;
-  fontSize?: number; fontFamily?: string; bold?: boolean; italic?: boolean; richText?: RichRun[];
+  fontSize?: number; fontFamily?: string; lineSpacing?: number; bold?: boolean; italic?: boolean; richText?: RichRun[];
   width?: number; height?: number; minWidth?: number; maxWidth?: number; minHeight?: number; maxHeight?: number; padding?: number; borderWidth?: number; borderStyle?: 'solid' | 'dashed' | 'dotted' | 'double'; connectionStyle?: LineStyle;
   paddingTop?: number; paddingRight?: number; paddingBottom?: number; paddingLeft?: number; cornerRadius?: number;
   textVerticalAlign?: 'top' | 'center' | 'bottom'; wrapText?: boolean;

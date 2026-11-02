@@ -1,7 +1,7 @@
 import type { MindNode, NodeStyle } from '../types';
 
 const sizeKeys = ['width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'] as const;
-const formatKeys = ['background', 'border', 'color', 'shape', 'icon', 'fontSize', 'fontFamily', 'bold', 'italic', 'underline', 'strike', 'textAlign', 'textVerticalAlign', 'wrapText', 'textTransform', 'cornerRadius', 'borderWidth', 'borderStyle'] as const;
+const formatKeys = ['background', 'border', 'color', 'shape', 'icon', 'fontSize', 'fontFamily', 'lineSpacing', 'bold', 'italic', 'underline', 'strike', 'textAlign', 'textVerticalAlign', 'wrapText', 'textTransform', 'cornerRadius', 'borderWidth', 'borderStyle'] as const;
 export function pickNodeStyle(node: MindNode, mode: 'size' | 'format' | 'both' = 'both'): Partial<NodeStyle> {
   const keys: readonly (keyof NodeStyle)[] = mode === 'size' ? sizeKeys : mode === 'format' ? formatKeys : [...sizeKeys, ...formatKeys];
   const style: Partial<NodeStyle> = {};

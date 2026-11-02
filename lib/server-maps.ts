@@ -15,7 +15,7 @@ const date = /^\d{4}-\d{2}-\d{2}$/;
 const layouts: LayoutMode[] = ['horizontal', 'vertical', 'bilateral', 'radial', 'fishbone', 'flowchart', 'swimlane', 'cycle', 'concept', 'network', 'matrix', 'timeline', 'concentric', 'treemap', 'right', 'left', 'balanced', 'down', 'up', 'split-down', 'org', 'org-left', 'fishbone-left', 'timeline-left', 'free'];
 const movements: MovementMode[] = ['individual', 'hierarchical', 'automatic'];
 const shapes: NodeShape[] = ['rounded', 'rectangle', 'pill', 'ellipse', 'circle', 'diamond', 'hexagon', 'underline', 'transparent', 'tag-right', 'tag-left', 'arrow-right', 'arrow-left', 'arrow-up', 'arrow-down', 'bookmark-right', 'bookmark-left', 'half-rounded-right', 'half-rounded-left'];
-const styleKeys: (keyof NodeStyle)[] = ['background', 'border', 'color', 'shape', 'icon', 'fontSize', 'fontFamily', 'bold', 'italic', 'underline', 'strike', 'textAlign', 'textVerticalAlign', 'wrapText', 'textTransform', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'cornerRadius', 'borderWidth', 'borderStyle'];
+const styleKeys: (keyof NodeStyle)[] = ['background', 'border', 'color', 'shape', 'icon', 'fontSize', 'fontFamily', 'lineSpacing', 'bold', 'italic', 'underline', 'strike', 'textAlign', 'textVerticalAlign', 'wrapText', 'textTransform', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'cornerRadius', 'borderWidth', 'borderStyle'];
 const styleKeySet = new Set<string>(styleKeys);
 
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -59,6 +59,7 @@ function validStyle(value: unknown): boolean {
     && optionalOneOf(value.shape, shapes)
     && optionalText(value.icon, 24)
     && optionalFinite(value.fontSize, 6, 200)
+    && optionalFinite(value.lineSpacing, 1, 2.5)
     && optionalText(value.fontFamily, 200)
     && ['bold', 'italic', 'underline', 'strike', 'wrapText'].every(key => optionalBoolean(value[key]))
     && optionalOneOf(value.textAlign, ['left', 'center', 'right'])

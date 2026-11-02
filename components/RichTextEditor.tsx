@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Bold, Italic, Strikethrough, Underline } from 'lucide-react';
 import { readRichText, richTextHtml } from '../lib/rich-text';
 import type { RichRun } from '../types';
 
-type Props = { nodeId: string; text: string; runs?: RichRun[]; onChange: (text: string, runs: RichRun[]) => void; compact?: boolean; autoFocus?: boolean; onDone?: () => void };
-export default function RichTextEditor({ nodeId, text, runs, onChange, compact, autoFocus, onDone }: Props) {
+export type RichTextEditorHandle = { command: (name: string, value?: string) => void; insert: (value: string) => void; hasSelection: () => boolean };
+type Props = { nodeId: string; text: string; runs?: RichRun[]; onChange: (text: string, runs: RichRun[]) => void; compact?: boolean; autoFocus?: boolean; hideControls?: boolean; onDone?: () => void };
+const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ nodeId, text, runs, onChange, compact, autoFocus, hideControls, onDone }, ref) {
   const editor = useRef<HTMLDivElement>(null);
   const [color, setColor] = useState('#fff0a8');
   const selection = useRef<Range | null>(null);
@@ -40,8 +41,9 @@ export default function RichTextEditor({ nodeId, text, runs, onChange, compact, 
     rememberSelection();
     save();
   };
+  useImperativeHandle(ref, () => ({ command, insert: value => command('insertText', value), hasSelection: () => Boolean(selection.current && !selection.current.collapsed) }));
   return <div className={`rich-text-editor ${compact ? 'rich-compact' : ''}`}>
-    {!compact && <div className="rich-controls">
+    {!compact && !hideControls && <div className="rich-controls">
       <button type="button" onMouseDown={event => event.preventDefault()} title="Negrito no trecho selecionado" onClick={() => command('bold')}><Bold size={15}/></button>
       <button type="button" onMouseDown={event => event.preventDefault()} title="Itálico no trecho selecionado" onClick={() => command('italic')}><Italic size={15}/></button>
       <button type="button" onMouseDown={event => event.preventDefault()} title="Sublinhado no trecho selecionado" onClick={() => command('underline')}><Underline size={15}/></button>
@@ -53,4 +55,5 @@ export default function RichTextEditor({ nodeId, text, runs, onChange, compact, 
     </div>}
     <div ref={editor} className="rich-editable nodrag" contentEditable role="textbox" aria-label="Texto formatado do nó" aria-multiline="true" suppressContentEditableWarning onInput={() => { if (pending.current) clearTimeout(pending.current); pending.current = setTimeout(save, 450); }} onMouseUp={rememberSelection} onKeyUp={rememberSelection} onBlur={() => { save(); onDone?.(); }} onPaste={event => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); }} onKeyDown={event => { event.stopPropagation(); if (compact && event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); editor.current?.blur(); } if (event.key === 'Escape') editor.current?.blur(); }} />
   </div>;
-}
+});
+export default RichTextEditor;

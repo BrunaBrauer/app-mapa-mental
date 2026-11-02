@@ -49,11 +49,11 @@ export function sizeLimits(node: MindNode) {
   const maxHeight = clamp(node.maxHeight ?? 500, minHeight, 500);
   return { minWidth, maxWidth, minHeight, maxHeight };
 }
-const styleProperties = new Set<keyof NodeStyle>(['background','border','color','shape','icon','fontSize','fontFamily','bold','italic','underline','strike','textAlign','textVerticalAlign','wrapText','textTransform','width','height','minWidth','maxWidth','minHeight','maxHeight','padding','paddingTop','paddingRight','paddingBottom','paddingLeft','cornerRadius','borderWidth','borderStyle']);
+const styleProperties = new Set<keyof NodeStyle>(['background','border','color','shape','icon','fontSize','fontFamily','lineSpacing','bold','italic','underline','strike','textAlign','textVerticalAlign','wrapText','textTransform','width','height','minWidth','maxWidth','minHeight','maxHeight','padding','paddingTop','paddingRight','paddingBottom','paddingLeft','cornerRadius','borderWidth','borderStyle']);
 const groupKeys: Record<VisualStyleGroup, (keyof NodeStyle)[]> = {
   fill: ['background'], contour: ['border','borderWidth','borderStyle','cornerRadius'], shape: ['shape'],
   padding: ['padding','paddingTop','paddingRight','paddingBottom','paddingLeft'],
-  text: ['color','fontSize','fontFamily','bold','italic','underline','strike','textAlign','textVerticalAlign','wrapText','textTransform'],
+  text: ['color','fontSize','fontFamily','lineSpacing','bold','italic','underline','strike','textAlign','textVerticalAlign','wrapText','textTransform'],
   dimensions: ['width','height','minWidth','maxWidth','minHeight','maxHeight'],
 };
 
