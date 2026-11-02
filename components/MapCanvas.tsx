@@ -53,9 +53,9 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
       && !['matrix', 'treemap', 'swimlane'].includes(map.layout)
       && !(n.parentId === root?.id && (stages.length >= 2 || map.layout === 'fishbone' || map.layout === 'timeline'))).map(n => {
     const parent = byId.get(n.parentId!)!; const target = byId.get(n.id)!;
-    const { sourceHandle, targetHandle } = map.layout === 'horizontal' && !parent.branchLayout
+    const { sourceHandle, targetHandle } = map.layout === 'horizontal'
       ? { sourceHandle: 'source-right', targetHandle: 'target-left' }
-      : map.layout === 'flowchart'
+      : map.layout === 'vertical' || map.layout === 'flowchart'
         ? { sourceHandle: 'source-bottom', targetHandle: 'target-top' }
         : alignedHandles(parent, target);
     const line = n.connectionStyle; const color = line?.color || '#b9b4db';

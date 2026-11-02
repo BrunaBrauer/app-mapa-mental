@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [editor, canvas, richText, movementSettings, css] = await Promise.all([
+const [editor, canvas, nodeView, richText, movementSettings, css] = await Promise.all([
   readFile('components/Editor.tsx', 'utf8'),
   readFile('components/MapCanvas.tsx', 'utf8'),
+  readFile('components/MindNodeView.tsx', 'utf8'),
   readFile('components/RichTextEditor.tsx', 'utf8'),
   readFile('components/MovementSettings.tsx', 'utf8'),
   readFile('app/globals.css', 'utf8'),
@@ -19,5 +20,8 @@ assert.match(css, /caret-color:var\(--accent\)/, 'The insertion caret must remai
 assert.match(css, /react-flow__node\.draggable\.dragging \.mind-node\{cursor:grabbing\}/, 'Dragging must expose a stable cursor');
 assert.match(canvas, /map\.siblingReorder && requested\.size === 1/, 'Aligned reordering must be opt-in');
 assert.match(movementSettings, /checked=\{Boolean\(map\.siblingReorder\)\}/, 'The map must expose an aligned-reordering toggle');
+for (const side of ['left', 'right', 'top', 'bottom']) assert.match(nodeView, new RegExp(`type="target" id="target-${side}"`), `Tree edges need a registered ${side} target handle`);
+assert.match(canvas, /map\.layout === 'horizontal'[\s\S]*?sourceHandle: 'source-right', targetHandle: 'target-left'/, 'Every horizontal tree edge starts at the right side');
+assert.match(canvas, /map\.layout === 'vertical' \|\| map\.layout === 'flowchart'[\s\S]*?sourceHandle: 'source-bottom', targetHandle: 'target-top'/, 'Every vertical tree edge starts at the bottom');
 
-console.log('Interações do editor: Backspace seguro, espaços editáveis, cursor visível e arraste sem auto-pan OK.');
+console.log('Interações do editor: Backspace seguro, espaços editáveis, cursor visível, arraste e conexões alinhadas OK.');
