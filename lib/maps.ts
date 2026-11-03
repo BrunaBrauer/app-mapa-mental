@@ -32,7 +32,7 @@ export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 2
     const widths = new Map<number, number>();
     for (const node of visibleNodes(placed).filter(node => !node.floating)) widths.set(depth(node), Math.max(widths.get(depth(node)) || 0, node.width ?? (node.parentId ? 145 : 182)));
     const columns = new Map<number, number>([[0, 0]]);
-    for (let level = 1; level <= widths.size; level++) columns.set(level, (columns.get(level - 1) || 0) + (widths.get(level - 1) || 145) + 56);
+    for (let level = 1; level <= widths.size; level++) columns.set(level, (columns.get(level - 1) || 0) + (widths.get(level - 1) || 145) + 72);
     return placed.map(node => node.floating ? node : { ...node, x: columns.get(depth(node)) ?? node.x });
   }
   const flowchart = mode === 'flowchart';
