@@ -8,7 +8,7 @@ import RelationshipQuickToolbar from './RelationshipQuickToolbar';
 import MultiNodeToolbar from './MultiNodeToolbar';
 import MovementSettings from './MovementSettings';
 import type { NodeAction, NodePanel } from './NodeQuickToolbar';
-import { layoutMap, createMap, createTemplate, descendants, visibleNodes, toMarkdown, uid, type TemplateKey } from '../lib/maps';
+import { layoutMap, createMap, createTemplate, descendants, visibleNodes, toggleBranch, toMarkdown, uid, type TemplateKey } from '../lib/maps';
 import { layoutOptions } from './LayoutPicker';
 import { migrateMapLayouts } from '../lib/layout-migration';
 import { importFontFile, loadImportedFonts, type ImportedFont } from '../lib/fonts';
@@ -297,7 +297,13 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
     const copies = branch.map(n => ({ ...n, id: ids.get(n.id)!, parentId: n.id === id ? original.parentId : ids.get(n.parentId!)!, y: n.y + 96, comments: n.comments?.map(c => ({ ...c, id: uid() })) }));
     const nodes = [...active.nodes, ...copies]; commit({ ...active, nodes: layoutMap(nodes, active.layout, active.spacing) }); selectOne(ids.get(id)!);
   };
-  const toggleNode = useCallback((id: string) => { if (active) commit({ ...active, nodes: active.nodes.map(n => n.id === id ? { ...n, collapsed: !n.collapsed } : n) }); }, [active, commit]);
+  const toggleNode = useCallback((id: string) => {
+    if (!active) return;
+    const toggled = toggleBranch(active.nodes, id);
+    if (toggled === active.nodes) return;
+    const nodes = active.layout === 'free' || active.layout === 'network' ? toggled : layoutMap(toggled, active.layout, active.spacing);
+    commit({ ...active, nodes });
+  }, [active, commit]);
   const applyLayout = (mode: LayoutMode) => {
     if (!active) return;
     if (mode === 'free' || mode === 'network' || mode === 'treemap') { commit({ ...active, layout: mode }); return; }

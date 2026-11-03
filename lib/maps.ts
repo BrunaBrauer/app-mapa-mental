@@ -30,7 +30,7 @@ export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 2
     const byId = new Map(placed.map(node => [node.id, node]));
     const depth = (node: MindNode) => { let level = 0; let parent = node.parentId; const seen = new Set([node.id]); while (parent && byId.has(parent) && !seen.has(parent)) { seen.add(parent); level++; parent = byId.get(parent)!.parentId; } return level; };
     const widths = new Map<number, number>();
-    for (const node of placed.filter(node => !node.floating)) widths.set(depth(node), Math.max(widths.get(depth(node)) || 0, node.width ?? (node.parentId ? 145 : 182)));
+    for (const node of visibleNodes(placed).filter(node => !node.floating)) widths.set(depth(node), Math.max(widths.get(depth(node)) || 0, node.width ?? (node.parentId ? 145 : 182)));
     const columns = new Map<number, number>([[0, 0]]);
     for (let level = 1; level <= widths.size; level++) columns.set(level, (columns.get(level - 1) || 0) + (widths.get(level - 1) || 145) + 56);
     return placed.map(node => node.floating ? node : { ...node, x: columns.get(depth(node)) ?? node.x });
@@ -46,7 +46,7 @@ export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 2
     const order = (node: MindNode) => node.flowAnswer === 'yes' ? 0 : node.flowAnswer === 'no' ? 1 : 2;
     return flowchart ? children.sort((a, b) => order(a) - order(b)) : children;
   };
-  const branches = kids(root.id);
+  const branches = root.collapsed ? [] : kids(root.id);
   if (mode === 'timeline') branches.sort((a, b) => (a.timelineDate || '9999-12-31').localeCompare(b.timelineDate || '9999-12-31'));
   if (mode === 'swimlane') {
     root.x = 0; root.y = 0;
@@ -66,7 +66,7 @@ export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 2
   if (mode === 'matrix') {
     const rows = root.matrixRows?.length || 2;
     const columns = root.matrixColumns?.length || 2;
-    const assigned = next.filter(node => node.id !== root.id && !node.floating);
+    const assigned = visibleNodes(next).filter(node => node.id !== root.id && !node.floating);
     const cells = new Map<string, MindNode[]>();
     assigned.forEach((node, index) => {
       const row = Math.min(rows - 1, node.matrixRow ?? Math.floor(index / columns) % rows);
@@ -260,6 +260,37 @@ export function descendants(nodes: MindNode[], id: string): Set<string> {
 export function visibleNodes(nodes: MindNode[]): MindNode[] {
   const byId = new Map(nodes.map(n => [n.id, n]));
   return nodes.filter(n => { let parent = n.parentId; const seen = new Set<string>(); while (parent) { if (seen.has(parent)) return false; seen.add(parent); const p = byId.get(parent); if (!p || p.collapsed) return false; parent = p.parentId; } return true; });
+}
+export function branchCounts(nodes: MindNode[]): Map<string, { direct: number; total: number }> {
+  const children = new Map<string, string[]>();
+  for (const node of nodes) if (node.parentId) children.set(node.parentId, [...(children.get(node.parentId) || []), node.id]);
+  const totals = new Map<string, number>();
+  const count = (id: string, path: Set<string>): number => {
+    if (totals.has(id)) return totals.get(id)!;
+    if (path.has(id)) return 0;
+    const nextPath = new Set(path).add(id);
+    const total = (children.get(id) || []).reduce((sum, childId) => sum + 1 + count(childId, nextPath), 0);
+    totals.set(id, total);
+    return total;
+  };
+  return new Map(nodes.map(node => [node.id, { direct: children.get(node.id)?.length || 0, total: count(node.id, new Set()) }]));
+}
+export function toggleBranch(nodes: MindNode[], id: string): MindNode[] {
+  if (!nodes.some(node => node.parentId === id)) return nodes;
+  // Only the clicked node changes; descendant collapse flags remain intact for reopening.
+  return nodes.map(node => node.id === id ? { ...node, collapsed: !node.collapsed } : node);
+}
+export type BranchDirection = 'left' | 'right' | 'top' | 'bottom';
+export function branchDirection(node: MindNode, children: MindNode[], layout: LayoutMode): BranchDirection {
+  const mode = node.branchLayout || layout;
+  if (['horizontal','right','fishbone','timeline'].includes(mode)) return 'right';
+  if (['left','org-left','fishbone-left','timeline-left'].includes(mode)) return 'left';
+  if (['vertical','down','org','flowchart','swimlane','matrix','treemap','split-down'].includes(mode)) return 'bottom';
+  if (mode === 'up') return 'top';
+  if (!children.length) return 'right';
+  const dx = children.reduce((sum, child) => sum + child.x - node.x, 0) / children.length;
+  const dy = children.reduce((sum, child) => sum + child.y - node.y, 0) / children.length;
+  return Math.abs(dx) >= Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'top' : 'bottom';
 }
 export function treemapRects(nodes: MindNode[]): Map<string, { x: number; y: number; width: number; height: number; depth: number }> {
   const visible = visibleNodes(nodes);

@@ -6,7 +6,7 @@ import type { ImportedFont } from '../lib/fonts';
 import StyledEdge from './StyledEdge';
 import type { NodeAction, NodePanel } from './NodeQuickToolbar';
 import type { LineStyle, MindMap, MindNode } from '../types';
-import { descendants, treemapRects, visibleNodes } from '../lib/maps';
+import { branchCounts, branchDirection, descendants, treemapRects, visibleNodes } from '../lib/maps';
 import { collectNodeDimensions, effectiveAvoidOverlap, movementModes, projectDrag, reorderAlignedSibling, reorganizeBranch, snapMoveAwayFromOverlap, visualSize } from '../lib/movement';
 import { alignedHandles } from '../lib/edge-geometry';
 import { applySiblingAlignments } from '../lib/visual-standardization';
@@ -39,7 +39,30 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     return visible.map(node => { const rect = rects.get(node.id); return rect ? { ...node, ...rect } : node; })
       .sort((a, b) => (rects.get(a.id)?.depth ?? 0) - (rects.get(b.id)?.depth ?? 0));
   }, [visible, map.layout, map.nodes]);
-  const baseNodes = useMemo<FlowMindNode[]>(() => { const childCounts = new Map<string, number>(); for (const node of map.nodes) if (node.parentId) childCounts.set(node.parentId, (childCounts.get(node.parentId) || 0) + 1); const modes = movementModes(map, globalMovementMode); return displayVisible.map(item => ({ id: item.id, type: 'mind', position: { x: item.x, y: item.y }, dragging: false, selected: selectedIds.includes(item.id), draggable: !readOnly && !item.positionLocked && map.layout !== 'treemap' && map.layout !== 'matrix', data: { item, map, childCount: childCounts.get(item.id) || 0, selected: selectedIds.includes(item.id), mapLayout: map.layout, effectiveMovement: modes.get(item.id) || globalMovementMode, inheritedAvoidOverlap: map.avoidOverlap ?? globalAvoidOverlap, toolbarVisible: selectedIds.length === 1 && (alwaysToolbar || contextNodeId === item.id || quickPanel?.id === item.id), alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, favoriteIcons: map.favoriteIcons || [], onFavoriteIcons, presets: map.stylePresets || [], requestedPanel: quickPanel?.id === item.id ? quickPanel : null } })); }, [displayVisible, map, globalMovementMode, globalAvoidOverlap, selectedIds, contextNodeId, quickPanel, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons]);
+  const baseNodes = useMemo<FlowMindNode[]>(() => {
+    const children = new Map<string, MindNode[]>();
+    for (const node of map.nodes) if (node.parentId) children.set(node.parentId, [...(children.get(node.parentId) || []), node]);
+    const counts = branchCounts(map.nodes);
+    const modes = movementModes(map, globalMovementMode);
+    return displayVisible.map(item => ({
+      id: item.id, type: 'mind', position: { x: item.x, y: item.y }, dragging: false,
+      selected: selectedIds.includes(item.id),
+      draggable: !readOnly && !item.positionLocked && map.layout !== 'treemap' && map.layout !== 'matrix',
+      data: {
+        item, map, childCount: counts.get(item.id)?.direct || 0,
+        hiddenDescendantCount: item.collapsed ? counts.get(item.id)?.total || 0 : 0,
+        collapseSide: branchDirection(item, children.get(item.id) || [], map.layout),
+        selected: selectedIds.includes(item.id), mapLayout: map.layout,
+        effectiveMovement: modes.get(item.id) || globalMovementMode,
+        inheritedAvoidOverlap: map.avoidOverlap ?? globalAvoidOverlap,
+        toolbarVisible: selectedIds.length === 1 && (alwaysToolbar || contextNodeId === item.id || quickPanel?.id === item.id),
+        alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onVisual,
+        onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont,
+        favoriteIcons: map.favoriteIcons || [], onFavoriteIcons, presets: map.stylePresets || [],
+        requestedPanel: quickPanel?.id === item.id ? quickPanel : null,
+      },
+    }));
+  }, [displayVisible, map, globalMovementMode, globalAvoidOverlap, selectedIds, contextNodeId, quickPanel, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons]);
   // Preserve unchanged node/data references during pointer movement.
   const nodes = useMemo(() => baseNodes.map(node => {
     const position = livePositions.get(node.id);

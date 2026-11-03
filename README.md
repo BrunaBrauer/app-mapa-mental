@@ -37,6 +37,7 @@ O build não depende de uma conexão direta ao PostgreSQL; as rotas de servidor 
 - Menu contextual por nó para criar, editar, estilizar, anotar, comentar, anexar imagem/link, configurar tarefas e escolher 14 layouts com miniaturas. Layouts de subnós reorganizam somente o ramo. A edição de propriedades não usa uma barra lateral permanente.
 - Ctrl+clique e Ctrl+arraste selecionam vários nós; o menu de grupo altera estilo e alinhamento em lote sem substituir textos ou notas individuais.
 - Temas claro/escuro, modelos prontos, atalhos, histórico de desfazer/refazer, recolher ramos e organização automática.
+- O controle permanente de cada ramo mostra a quantidade de filhos diretos e, quando recolhido, o total de descendentes ocultos. Recolher um ramo preserva os estados de seus sub-ramos; expandi-lo restaura a visualização anterior. Nos layouts automáticos, os nós visíveis são reorganizados para fechar espaços vazios. No layout livre, as posições manuais são preservadas.
 - Salvamento automático, lista de mapas, duplicação, importação JSON e exportação PNG, PDF, Markdown e JSON.
 - Compartilhamento público somente leitura por token.
 - Integração manual com Google Drive para abrir/salvar cópias JSON e anexar arquivos, mediante credenciais OAuth próprias (`NEXT_PUBLIC_GOOGLE_*`). Não é sincronização automática.
