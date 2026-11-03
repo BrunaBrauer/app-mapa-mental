@@ -58,5 +58,9 @@
 .mind-node .node-branch-actions .node-add{opacity:1}
 .mind-node .node-branch-actions:not(:has(.node-collapse)) .node-add{opacity:0}
 .mind-node:hover .node-branch-actions .node-add,.mind-node.node-selected .node-branch-actions .node-add{opacity:1}
-.mind-node .node-branch-actions .node-collapse{display:inline-flex;align-items:center;justify-content:center;min-height:23px;padding:2px 5px;border:1px solid #cbd0db;border-radius:12px;background:#fff;color:#20243b;box-shadow:0 2px 8px #17172d18;font-size:11px;font-weight:700;line-height:1;white-space:nowrap;cursor:pointer}
+.mind-node .node-branch-actions .node-collapse{display:inline-flex;align-items:center;justify-content:center;gap:3px;min-height:23px;padding:2px 5px;border:1px solid #cbd0db;border-radius:12px;background:#fff;color:#20243b;box-shadow:0 2px 8px #17172d18;font-size:11px;font-weight:700;line-height:1;white-space:nowrap;cursor:pointer}
 .mind-node .node-branch-actions .node-collapse:hover,.mind-node .node-branch-actions .node-collapse:focus-visible{border-color:var(--accent);color:var(--accent);outline:2px solid #7057e833;outline-offset:1px}
+.node-collapse-chevron{display:inline-block;line-height:1;transform-origin:center}
+.node-collapse-chevron-left-expand,.node-collapse-chevron-right-collapse{transform:rotate(180deg)}
+.node-collapse-chevron-top-expand,.node-collapse-chevron-bottom-collapse{transform:rotate(-90deg)}
+.node-collapse-chevron-bottom-expand,.node-collapse-chevron-top-collapse{transform:rotate(90deg)}
