@@ -8,7 +8,7 @@ import RelationshipQuickToolbar from './RelationshipQuickToolbar';
 import MultiNodeToolbar from './MultiNodeToolbar';
 import MovementSettings from './MovementSettings';
 import type { NodeAction, NodePanel } from './NodeQuickToolbar';
-import { layoutMap, createMap, createTemplate, descendants, visibleNodes, toggleBranch, toMarkdown, uid, type TemplateKey } from '../lib/maps';
+import { layoutConflictCount, layoutMap, createMap, createTemplate, descendants, visibleNodes, toggleBranch, toMarkdown, uid, type TemplateKey } from '../lib/maps';
 import { layoutOptions } from './LayoutPicker';
 import { migrateMapLayouts } from '../lib/layout-migration';
 import { importFontFile, loadImportedFonts, type ImportedFont } from '../lib/fonts';
@@ -145,6 +145,25 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
               maps.push(map);
             } catch { migrationFailed = true; }
           }
+        }
+        // Repair legacy automatic maps only when their saved geometry has a visible conflict.
+        for (let index = 0; index < maps.length; index++) {
+          const map = maps[index];
+          if (['free', 'network', 'treemap'].includes(map.layout)) continue;
+          const before = layoutConflictCount(map.nodes, map.layout);
+          if (!before) continue;
+          let nodes = layoutMap(map.nodes, map.layout, map.spacing);
+          const root = map.nodes.find(node => !node.parentId && !node.floating);
+          const placedRoot = root && nodes.find(node => node.id === root.id);
+          if (root && placedRoot && !map.nodes.some(node => node.positionLocked)) {
+            const dx = root.x - placedRoot.x, dy = root.y - placedRoot.y;
+            nodes = nodes.map(node => node.floating ? node : { ...node, x: node.x + dx, y: node.y + dy });
+          }
+          if (layoutConflictCount(nodes, map.layout) >= before) continue;
+          const repaired = { ...map, nodes };
+          maps[index] = repaired;
+          try { await api(`/api/maps/${map.id}`, { method: 'PUT', body: JSON.stringify(repaired) }); }
+          catch { migrationFailed = true; }
         }
         const params = new URLSearchParams(window.location.search);
         const target = maps.find(map => map.id === params.get('map'));

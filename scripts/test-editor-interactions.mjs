@@ -22,8 +22,9 @@ assert.match(css, /react-flow__node\.draggable\.dragging \.mind-node\{cursor:gra
 assert.match(canvas, /map\.siblingReorder && requested\.size === 1/, 'Aligned reordering must be opt-in');
 assert.match(movementSettings, /checked=\{Boolean\(map\.siblingReorder\)\}/, 'The map must expose an aligned-reordering toggle');
 for (const side of ['left', 'right', 'top', 'bottom']) assert.match(nodeView, new RegExp(`type="target" id="target-${side}"`), `Tree edges need a registered ${side} target handle`);
-assert.match(canvas, /map\.layout === 'horizontal'[\s\S]*?sourceHandle: 'source-right', targetHandle: 'target-left'/, 'Every horizontal tree edge starts at the right side');
-assert.match(canvas, /map\.layout === 'vertical' \|\| map\.layout === 'flowchart'[\s\S]*?sourceHandle: 'source-bottom', targetHandle: 'target-top'/, 'Every vertical tree edge starts at the bottom');
+assert.match(canvas, /const edgeLayout = parent\.branchLayout \|\| map\.layout/, 'Connections follow the parent branch layout');
+assert.match(canvas, /horizontalTree[\s\S]*?sourceHandle: 'source-right', targetHandle: 'target-left'/, 'Horizontal tree edges start on the right when the child is actually to the right');
+assert.match(canvas, /edgeLayout === 'vertical' \|\| edgeLayout === 'flowchart'[\s\S]*?sourceHandle: 'source-bottom', targetHandle: 'target-top'/, 'Vertical tree edges start at the bottom');
 
 const richCode = ts.transpileModule(await readFile('lib/rich-text.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { richTextHtml, formatWholeText } = await import(`data:text/javascript;base64,${Buffer.from(richCode).toString('base64')}`);

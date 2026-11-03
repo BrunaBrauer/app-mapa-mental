@@ -6,7 +6,7 @@ import type { ImportedFont } from '../lib/fonts';
 import StyledEdge from './StyledEdge';
 import type { NodeAction, NodePanel } from './NodeQuickToolbar';
 import type { LineStyle, MindMap, MindNode } from '../types';
-import { branchCounts, branchDirection, descendants, treemapRects, visibleNodes } from '../lib/maps';
+import { branchCounts, branchDirection, descendants, matrixGeometry, swimlaneGeometry, treemapRects, visibleNodes } from '../lib/maps';
 import { collectNodeDimensions, effectiveAvoidOverlap, movementModes, projectDrag, reorderAlignedSibling, reorganizeBranch, snapMoveAwayFromOverlap, visualSize } from '../lib/movement';
 import { alignedHandles } from '../lib/edge-geometry';
 import { applySiblingAlignments } from '../lib/visual-standardization';
@@ -76,15 +76,17 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
       && !['matrix', 'treemap', 'swimlane'].includes(map.layout)
       && !(n.parentId === root?.id && (stages.length >= 2 || map.layout === 'fishbone' || map.layout === 'timeline'))).map(n => {
     const parent = byId.get(n.parentId!)!; const target = byId.get(n.id)!;
-    const { sourceHandle, targetHandle } = map.layout === 'horizontal'
+    const edgeLayout = parent.branchLayout || map.layout;
+    const horizontalTree = edgeLayout === 'horizontal' && target.x >= parent.x + visualSize(parent).width;
+    const { sourceHandle, targetHandle } = horizontalTree
       ? { sourceHandle: 'source-right', targetHandle: 'target-left' }
-      : map.layout === 'vertical' || map.layout === 'flowchart'
+      : (edgeLayout === 'vertical' || edgeLayout === 'flowchart') && target.y > parent.y
         ? { sourceHandle: 'source-bottom', targetHandle: 'target-top' }
         : alignedHandles(parent, target);
     const line = n.connectionStyle; const color = line?.color || '#b9b4db';
     const label = map.layout === 'flowchart' && parent.flowDecision ? n.flowAnswer === 'yes' ? 'Sim' : n.flowAnswer === 'no' ? 'Não' : undefined
       : map.layout === 'concept' ? n.conceptRelation || 'relaciona-se' : undefined;
-    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: { ...line, color }, route: map.layout === 'horizontal' ? 'horizontal-tree' as const : undefined }, animated: false, style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) };
+    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: { ...line, color }, route: horizontalTree ? 'horizontal-tree' as const : undefined }, animated: false, style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) };
     });
     const cycle = stages.length < 2 ? [] : stages.map((stage, index) => {
       const target = stages[(index + 1) % stages.length];
@@ -138,25 +140,20 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     if (!root) return null;
     const branches = visible.filter(node => node.parentId === root.id);
     if (map.layout === 'swimlane') {
+      const { laneWidth } = swimlaneGeometry(map.nodes);
       const height = Math.max(300, ...visible.filter(node => node.parentId).map(node => node.y + 120));
-      return branches.map((branch, index) => <div key={branch.id} className="swimlane-backdrop" style={{ left: root.x + 250 + index * 300, top: root.y - 35, width: 280, height: height + 35 }}><span>{branch.text}</span></div>);
+      return branches.map((branch, index) => <div key={branch.id} className="swimlane-backdrop" style={{ left: root.x + 250 + index * laneWidth, top: root.y - 35, width: laneWidth - 20, height: height + 35 }}><span>{branch.text}</span></div>);
     }
     if (map.layout === 'matrix') {
       const rows = root.matrixRows?.length ? root.matrixRows : ['Linha 1', 'Linha 2'];
       const columns = root.matrixColumns?.length ? root.matrixColumns : ['Coluna 1', 'Coluna 2'];
-      const assigned = visible.filter(node => node.id !== root.id && !node.floating);
-      const counts = new Map<string, number>();
-      assigned.forEach((node, index) => {
-        const row = Math.min(rows.length - 1, node.matrixRow ?? Math.floor(index / columns.length) % rows.length);
-        const column = Math.min(columns.length - 1, node.matrixColumn ?? index % columns.length);
-        const key = `${row}:${column}`; counts.set(key, (counts.get(key) || 0) + 1);
-      });
-      const height = Math.max(180, ...[...counts.values()].map(count => count * 84 + 60));
-      const left = root.x + (root.width ?? 182) / 2 - columns.length * 280 / 2;
-      const top = root.y + 180;
-      return <>{columns.map((label, column) => <div key={`column-${column}`} className="matrix-axis matrix-column" style={{ left: left + column * 280, top: top - 35, width: 280 }}>{label}</div>)}
-        {rows.map((label, row) => <div key={`row-${row}`} className="matrix-axis matrix-row" style={{ left: left - 132, top: top + row * height + 8, height: height - 16 }}>{label}</div>)}
-        {rows.flatMap((_, row) => columns.map((_, column) => <div key={`${row}:${column}`} className="matrix-cell" style={{ left: left + column * 280, top: top + row * height, width: 280, height }}/>))}</>;
+      const geometry = matrixGeometry(map.nodes);
+      if (!geometry) return null;
+      const left = root.x + geometry.left;
+      const top = root.y + geometry.top;
+      return <>{columns.map((label, column) => <div key={`column-${column}`} className="matrix-axis matrix-column" style={{ left: left + column * geometry.cellWidth, top: top - 35, width: geometry.cellWidth }}>{label}</div>)}
+        {rows.map((label, row) => <div key={`row-${row}`} className="matrix-axis matrix-row" style={{ left: left - 132, top: top + row * geometry.cellHeight + 8, height: geometry.cellHeight - 16 }}>{label}</div>)}
+        {rows.flatMap((_, row) => columns.map((_, column) => <div key={`${row}:${column}`} className="matrix-cell" style={{ left: left + column * geometry.cellWidth, top: top + row * geometry.cellHeight, width: geometry.cellWidth, height: geometry.cellHeight }}/>))}</>;
     }
     if (map.layout === 'fishbone' || map.layout === 'timeline') {
       const rootSize = visualSize(root);
@@ -166,7 +163,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
       return <svg className="diagram-axis" style={{ left: 0, top: 0 }} width="1" height="1" aria-hidden="true"><defs><marker id="diagram-axis-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#8a7af0"/></marker></defs><path d={`M ${startX} ${axisY} L ${endX} ${axisY}`} markerEnd="url(#diagram-axis-arrow)"/>{branches.map(node => { const size = visualSize(node); const x = node.x + size.width / 2; const y = node.y + (node.y < axisY ? size.height : 0); return <path key={node.id} d={`M ${x} ${axisY} L ${x} ${y}`}/>; })}</svg>;
     }
     return null;
-  }, [visible, map.layout]);
+  }, [visible, map.layout, map.nodes]);
   const concentricRings = useMemo(() => {
     if (map.layout !== 'concentric') return [];
     const root = displayVisible.find(node => !node.parentId && !node.floating);

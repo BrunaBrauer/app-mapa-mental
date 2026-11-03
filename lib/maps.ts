@@ -50,13 +50,14 @@ export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 2
   if (mode === 'timeline') branches.sort((a, b) => (a.timelineDate || '9999-12-31').localeCompare(b.timelineDate || '9999-12-31'));
   if (mode === 'swimlane') {
     root.x = 0; root.y = 0;
+    const { laneWidth, rowGap } = swimlaneGeometry(next);
     branches.forEach((branch, lane) => {
       const seen = new Set<string>(); let row = 0;
-      branch.x = 250 + lane * 300 + 36; branch.y = 12;
+      branch.x = 250 + lane * laneWidth + 36; branch.y = 12;
       const place = (parent: MindNode, depth: number) => {
         if (seen.has(parent.id)) return;
         seen.add(parent.id);
-        if (parent !== branch) { parent.x = 250 + lane * 300 + 36 + Math.min(depth - 1, 3) * 12; parent.y = 150 + row++ * 130; }
+        if (parent !== branch) { parent.x = 250 + lane * laneWidth + 36 + Math.min(depth - 1, 3) * 12; parent.y = 150 + row++ * rowGap; }
         if (!parent.collapsed) kids(parent.id).forEach(child => place(child, depth + 1));
       };
       place(branch, 0);
@@ -64,23 +65,17 @@ export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 2
     return next;
   }
   if (mode === 'matrix') {
-    const rows = root.matrixRows?.length || 2;
-    const columns = root.matrixColumns?.length || 2;
-    const assigned = visibleNodes(next).filter(node => node.id !== root.id && !node.floating);
-    const cells = new Map<string, MindNode[]>();
-    assigned.forEach((node, index) => {
-      const row = Math.min(rows - 1, node.matrixRow ?? Math.floor(index / columns) % rows);
-      const column = Math.min(columns - 1, node.matrixColumn ?? index % columns);
-      const key = `${row}:${column}`;
-      const cell = cells.get(key);
-      if (cell) cell.push(node); else cells.set(key, [node]);
-    });
-    const cellHeight = Math.max(180, ...[...cells.values()].map(cell => cell.length * 84 + 60));
+    const grid = matrixGeometry(next);
+    if (!grid) return next;
     root.x = 0; root.y = 0;
-    const gridLeft = (root.width ?? 182) / 2 - columns * 280 / 2;
-    cells.forEach((items, key) => {
+    grid.cells.forEach((items, key) => {
       const [row, column] = key.split(':').map(Number);
-      items.forEach((node, index) => { node.x = gridLeft + column * 280 + 30; node.y = 180 + row * cellHeight + 48 + index * 84; });
+      let offset = 30;
+      items.forEach(node => {
+        node.x = grid.left + column * grid.cellWidth + 30;
+        node.y = grid.top + row * grid.cellHeight + offset;
+        offset += layoutSize(node).height + 24;
+      });
     });
     return next;
   }
@@ -248,9 +243,10 @@ export function layoutMap(nodes: MindNode[], mode: LayoutMode, spacing = { x: 26
     const originals = new Map(nodes.filter(node => descendants(nodes, branch.id).has(node.id)).map(node => [node.id, node]));
     result = result.map(node => originals.has(node.id) ? { ...node, x: originals.get(node.id)!.x, y: originals.get(node.id)!.y } : node);
   });
-  nodes.filter(node => node.branchLayout && node.branchLayout !== 'free' && node.branchLayout !== 'network').forEach(node => { result = layoutBranch(result, node.id, node.branchLayout!, spacing); });
+  if (!['matrix', 'swimlane', 'treemap'].includes(mode)) nodes.filter(node => node.branchLayout && node.branchLayout !== 'free' && node.branchLayout !== 'network').forEach(node => { result = layoutBranch(result, node.id, node.branchLayout!, spacing); });
   const originalPositions = new Map(nodes.filter(node => node.positionLocked).map(node => [node.id, { x: node.x, y: node.y }]));
-  return result.map(node => originalPositions.has(node.id) ? { ...node, ...originalPositions.get(node.id)! } : node);
+  const anchored = result.map(node => originalPositions.has(node.id) ? { ...node, ...originalPositions.get(node.id)! } : node);
+  return spaceDiagramLayout(packTreeLayout(anchored, mode), mode);
 }
 export function descendants(nodes: MindNode[], id: string): Set<string> {
   const found = new Set([id]); let changed = true;
@@ -291,6 +287,167 @@ export function branchDirection(node: MindNode, children: MindNode[], layout: La
   const dx = children.reduce((sum, child) => sum + child.x - node.x, 0) / children.length;
   const dy = children.reduce((sum, child) => sum + child.y - node.y, 0) / children.length;
   return Math.abs(dx) >= Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'top' : 'bottom';
+}
+type Bounds = { left: number; top: number; right: number; bottom: number };
+const treeLayouts: LayoutMode[] = ['horizontal', 'right', 'left', 'balanced', 'bilateral', 'vertical', 'down', 'up', 'org', 'org-left', 'flowchart', 'split-down'];
+function layoutSize(node: MindNode): { width: number; height: number } {
+  const width = node.width ?? (node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 205 : node.shape === 'ellipse' ? 175 : !node.parentId && !node.floating ? 182 : 145);
+  const baseHeight = node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 118 : node.shape === 'ellipse' ? 74 : !node.parentId && !node.floating ? 62 : 50;
+  const textWidth = Math.max(40, width - (node.paddingLeft ?? node.padding ?? 14) - (node.paddingRight ?? node.padding ?? 14) - 4);
+  const lineCount = node.wrapText === false ? 1 : Math.max(1, Math.ceil(node.text.length * (node.fontSize ?? 14) * .56 / textWidth));
+  const textHeight = lineCount * (node.fontSize ?? 14) * (node.lineSpacing ?? 1.3) + (node.paddingTop ?? node.padding ?? 10) + (node.paddingBottom ?? node.padding ?? 10) + (node.borderWidth ?? 2) * 2;
+  return { width: Math.max(width, node.minWidth ?? 0), height: Math.max(node.height ?? Math.max(baseHeight, textHeight + (node.image ? 120 : 0)), node.minHeight ?? 0) };
+}
+export function matrixGeometry(nodes: MindNode[]) {
+  const root = nodes.find(node => !node.parentId && !node.floating);
+  if (!root) return null;
+  const rows = root.matrixRows?.length || 2;
+  const columns = root.matrixColumns?.length || 2;
+  const assigned = visibleNodes(nodes).filter(node => node.id !== root.id && !node.floating);
+  const cells = new Map<string, MindNode[]>();
+  assigned.forEach((node, index) => {
+    const row = Math.min(rows - 1, node.matrixRow ?? Math.floor(index / columns) % rows);
+    const column = Math.min(columns - 1, node.matrixColumn ?? index % columns);
+    const key = `${row}:${column}`;
+    cells.set(key, [...(cells.get(key) || []), node]);
+  });
+  const cellWidth = Math.max(280, ...assigned.map(node => layoutSize(node).width + 60));
+  const cellHeight = Math.max(180, ...[...cells.values()].map(items => 60 + items.reduce((sum, node) => sum + layoutSize(node).height + 24, 0)));
+  return { cells, rows, columns, cellWidth, cellHeight, left: layoutSize(root).width / 2 - columns * cellWidth / 2, top: 180 };
+}
+export function swimlaneGeometry(nodes: MindNode[]) {
+  const visible = visibleNodes(nodes).filter(node => !node.floating);
+  return {
+    laneWidth: Math.max(300, ...visible.map(node => layoutSize(node).width + 100)),
+    rowGap: Math.max(130, ...visible.map(node => layoutSize(node).height + 40)),
+  };
+}
+export function packTreeLayout(nodes: MindNode[], layout: LayoutMode): MindNode[] {
+  if (!treeLayouts.includes(layout) || nodes.length < 2) return nodes;
+  const result = nodes.map(node => ({ ...node }));
+  const visible = visibleNodes(result);
+  const byId = new Map(result.map(node => [node.id, node]));
+  const children = new Map<string, MindNode[]>();
+  for (const node of visible) if (node.parentId) {
+    const siblings = children.get(node.parentId) || [];
+    siblings.push(node);
+    children.set(node.parentId, siblings);
+  }
+  const branch = new Map<string, MindNode[]>();
+  const visiting = new Set<string>();
+  const box = (node: MindNode): Bounds => {
+    const size = layoutSize(node);
+    return { left: node.x, top: node.y, right: node.x + size.width, bottom: node.y + size.height };
+  };
+  const bounds = (items: MindNode[]): Bounds => items.reduce((area, node) => {
+    const current = box(node);
+    return { left: Math.min(area.left, current.left), top: Math.min(area.top, current.top), right: Math.max(area.right, current.right), bottom: Math.max(area.bottom, current.bottom) };
+  }, { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity });
+  const move = (items: MindNode[], dx: number, dy: number) => {
+    if (!dx && !dy || items.some(item => item.positionLocked || item.branchLayout === 'free' || item.branchLayout === 'network')) return;
+    for (const item of items) { item.x += dx; item.y += dy; }
+  };
+  const visit = (node: MindNode): MindNode[] => {
+    if (branch.has(node.id)) return branch.get(node.id)!;
+    if (visiting.has(node.id)) return [node];
+    visiting.add(node.id);
+    if (node.branchLayout && !treeLayouts.includes(node.branchLayout)) {
+      const collect = (parent: MindNode, seen = new Set<string>()): MindNode[] => {
+        if (seen.has(parent.id)) return [];
+        seen.add(parent.id);
+        return [parent, ...(children.get(parent.id) || []).flatMap(child => collect(child, seen))];
+      };
+      const items = collect(node);
+      branch.set(node.id, items);
+      visiting.delete(node.id);
+      return items;
+    }
+    const groups = new Map<BranchDirection, MindNode[]>();
+    for (const child of children.get(node.id) || []) {
+      visit(child);
+      const side = branchDirection(node, [child], layout);
+      groups.set(side, [...(groups.get(side) || []), child]);
+    }
+    // Keep entire sibling subtrees apart, then leave a clear channel from parent to child.
+    for (const [side, siblings] of groups) {
+      let edge = -Infinity;
+      for (const child of siblings) {
+        const items = branch.get(child.id) || [child];
+        let area = bounds(items);
+        const parent = box(node);
+        const gap = 72;
+        const dx = side === 'right' ? Math.max(0, parent.right + gap - area.left) : side === 'left' ? Math.min(0, parent.left - gap - area.right) : 0;
+        const dy = side === 'bottom' ? Math.max(0, parent.bottom + gap - area.top) : side === 'top' ? Math.min(0, parent.top - gap - area.bottom) : 0;
+        move(items, dx, dy);
+        area = bounds(items);
+        const transverse = side === 'right' || side === 'left' ? area.top : area.left;
+        const shift = Math.max(0, edge + 28 - transverse);
+        move(items, side === 'right' || side === 'left' ? 0 : shift, side === 'right' || side === 'left' ? shift : 0);
+        area = bounds(items);
+        edge = side === 'right' || side === 'left' ? area.bottom : area.right;
+      }
+    }
+    const descendants = [...(children.get(node.id) || []).flatMap(child => branch.get(child.id) || [child])];
+    if (descendants.length && !node.positionLocked) {
+      const direct = children.get(node.id)!;
+      const horizontal = [...groups.keys()].every(side => side === 'right' || side === 'left');
+      if (horizontal) node.y = (direct[0].y + layoutSize(direct[0]).height / 2 + direct[direct.length - 1].y + layoutSize(direct[direct.length - 1]).height / 2) / 2 - layoutSize(node).height / 2;
+      else node.x = (direct[0].x + layoutSize(direct[0]).width / 2 + direct[direct.length - 1].x + layoutSize(direct[direct.length - 1]).width / 2) / 2 - layoutSize(node).width / 2;
+    }
+    const items = [node, ...descendants];
+    branch.set(node.id, items);
+    visiting.delete(node.id);
+    return items;
+  };
+  for (const root of visible.filter(node => !node.parentId && !node.floating && byId.has(node.id))) visit(root);
+  return result;
+}
+function spaceDiagramLayout(nodes: MindNode[], layout: LayoutMode): MindNode[] {
+  if (!['radial', 'concept', 'concentric', 'cycle', 'fishbone', 'fishbone-left', 'timeline', 'timeline-left'].includes(layout)) return nodes;
+  const root = nodes.find(node => !node.parentId && !node.floating);
+  if (!root) return nodes;
+  const initial = visibleNodes(nodes).filter(node => !node.floating);
+  const overlaps = (items: MindNode[]) => items.some((a, index) => items.slice(index + 1).some(b => {
+    const sa = layoutSize(a), sb = layoutSize(b);
+    return a.x < b.x + sb.width + 24 && a.x + sa.width + 24 > b.x && a.y < b.y + sb.height + 24 && a.y + sa.height + 24 > b.y;
+  }));
+  if (!overlaps(initial)) return nodes;
+  // Scaling around the central topic keeps radial angles and fishbone lanes intact.
+  const center = { x: root.x + layoutSize(root).width / 2, y: root.y + layoutSize(root).height / 2 };
+  for (let factor = 1.15; factor <= 4; factor += .15) {
+    const expanded = nodes.map(node => node === root || node.floating || node.positionLocked ? node : {
+      ...node, x: center.x + (node.x - center.x) * factor,
+      y: center.y + (node.y - center.y) * factor,
+    });
+    const candidate = visibleNodes(expanded).filter(node => !node.floating);
+    if (!overlaps(candidate)) return expanded;
+  }
+  return nodes;
+}
+export function layoutConflictCount(nodes: MindNode[], layout: LayoutMode): number {
+  const visible = visibleNodes(nodes).filter(node => !node.floating);
+  let conflicts = 0;
+  for (let i = 0; i < visible.length; i++) for (let j = i + 1; j < visible.length; j++) {
+    const a = visible[i], b = visible[j];
+    const sa = layoutSize(a), sb = layoutSize(b);
+    if (a.x < b.x + sb.width + 12 && a.x + sa.width + 12 > b.x && a.y < b.y + sb.height + 12 && a.y + sa.height + 12 > b.y) conflicts++;
+  }
+  if (layout !== 'horizontal') return conflicts;
+  const byId = new Map(visible.map(node => [node.id, node]));
+  for (const child of visible) {
+    const parent = child.parentId && byId.get(child.parentId);
+    if (!parent || parent.branchLayout && parent.branchLayout !== 'horizontal') continue;
+    const trunkX = parent.x + layoutSize(parent).width + 24;
+    if (child.x <= trunkX) continue;
+    const sourceY = parent.y + layoutSize(parent).height / 2;
+    const targetY = child.y + layoutSize(child).height / 2;
+    for (const other of visible) {
+      if (other.id === parent.id || other.id === child.id) continue;
+      const area = layoutSize(other);
+      if (trunkX > other.x && trunkX < other.x + area.width && Math.max(sourceY, targetY) > other.y && Math.min(sourceY, targetY) < other.y + area.height) conflicts++;
+    }
+  }
+  return conflicts;
 }
 export function treemapRects(nodes: MindNode[]): Map<string, { x: number; y: number; width: number; height: number; depth: number }> {
   const visible = visibleNodes(nodes);

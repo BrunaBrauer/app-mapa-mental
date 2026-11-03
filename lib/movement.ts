@@ -1,5 +1,5 @@
 import type { LayoutMode, MindMap, MindNode, MovementMode } from '../types';
-import { layoutBranch, visibleNodes } from './maps';
+import { layoutBranch, layoutMap, packTreeLayout, visibleNodes } from './maps';
 
 export type Point = { x: number; y: number };
 export type NodeDimensions = Map<string, { width: number; height: number }>;
@@ -182,28 +182,17 @@ function intersects(a: MindNode, b: MindNode, gap = 12, dimensions?: NodeDimensi
   return a.x < b.x + bSize.width + gap && a.x + aSize.width + gap > b.x && a.y < b.y + bSize.height + gap && a.y + aSize.height + gap > b.y;
 }
 
-export function reorganizeBranch(map: MindMap, id: string, avoidOverlap = true, dimensions?: NodeDimensions): MindMap {
+export function reorganizeBranch(map: MindMap, id: string, _avoidOverlap = true, _dimensions?: NodeDimensions): MindMap {
+  // Keep the public call signature; automatic layouts now reserve space by default.
+  void _avoidOverlap; void _dimensions;
   const anchor = map.nodes.find(node => node.id === id);
   if (!anchor) return map;
-  const ids = branchIds(id, childrenOf(map.nodes));
   const mode: LayoutMode = anchor.branchLayout || (map.layout === 'free' || map.layout === 'network' ? 'horizontal' : map.layout);
   const originals = new Map(map.nodes.map(node => [node.id, node]));
-  const planned = layoutBranch(map.nodes.map(node => ids.has(node.id) ? { ...node, collapsed: false } : node), id, mode, map.spacing);
+  const planned = anchor.parentId
+    ? packTreeLayout(layoutBranch(map.nodes, id, mode, map.spacing), map.layout === 'free' || map.layout === 'network' ? mode : map.layout)
+    : layoutMap(map.nodes, mode, map.spacing);
   const next = planned.map(node => { const original = originals.get(node.id)!; return node.positionLocked ? { ...node, x: original.x, y: original.y, collapsed: original.collapsed } : { ...node, collapsed: original.collapsed }; });
-  if (avoidOverlap && !['cycle', 'concentric', 'radial', 'concept', 'matrix', 'swimlane', 'treemap'].includes(mode)) {
-    const perpendicular = ['flowchart', 'vertical', 'down', 'up', 'org'].includes(mode) ? 'x' : 'y';
-    const sign = mode === 'up' || mode === 'left' || mode === 'org-left' ? -1 : 1;
-    const occupied = next.filter(node => !ids.has(node.id) || node.positionLocked || node.id === id);
-    for (const node of next.filter(node => ids.has(node.id) && node.id !== id && !node.positionLocked)) {
-      const original = { x: node.x, y: node.y };
-      let step = 0;
-      while (occupied.some(other => intersects(node, other, 12, dimensions)) && step < 40) {
-        step++;
-        node[perpendicular] = original[perpendicular] + sign * step * (perpendicular === 'x' ? (map.spacing?.x || 260) / 2 : (map.spacing?.y || 112) / 2);
-      }
-      occupied.push(node);
-    }
-  }
   return { ...map, nodes: next };
 }
 
