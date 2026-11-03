@@ -67,6 +67,8 @@ assert.equal(validMap({ ...copy, nodes: [copy.nodes[0], { ...copy.nodes[0], id: 
 assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], parentId: 'missing' }] }), false);
 assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], floating: true, parentId: copy.nodes[1].id }] }), false);
 assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], richText: [{ text: { invalid: true } }] }] }), false);
+assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], richText: [{ text: 'Parcial', bold: true, highlight: '#fff0a8', fontSize: 20, fontFamily: 'Georgia, serif', lineSpacing: 1.5, letterSpacing: 0.4, textTransform: 'uppercase' }] }] }), true, 'Partial typography survives cloud validation');
+assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], richText: [{ text: 'Inválido', fontSize: 200 }] }] }), false);
 assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], richText: [{ text: 'x'.repeat(1001) }] }] }), false);
 assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], comments: [{ id: 'comment', text: 123, createdAt: Date.now() }] }] }), false);
 assert.equal(validMap({ ...copy, nodes: [{ ...copy.nodes[0], task: { done: false, progress: 101 } }] }), false);

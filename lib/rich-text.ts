@@ -7,17 +7,30 @@ const normalizeColor = (value: string) => {
   return match ? `#${match.slice(1, 4).map(channel => Number(channel).toString(16).padStart(2, '0')).join('')}` : value;
 };
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
+const safeFamily = (value: string) => /^[\p{L}\p{N}\s,."'_-]{1,120}$/u.test(value);
+
+export function formatWholeText(text: string, runs: RichRun[] | undefined, patch: Partial<RichRun>): RichRun[] {
+  return (runs?.length ? runs : [{ text }]).map(run => ({ ...run, ...patch }));
+}
 
 export function richTextHtml(text: string, runs?: RichRun[]) {
   return (runs?.length ? runs : [{ text }]).map(run => {
-    const style = run.highlight && hexColor.test(run.highlight) ? ` style="background-color:${run.highlight}"` : '';
+    const styles: string[] = [];
+    if (run.highlight && hexColor.test(run.highlight)) styles.push(`background-color:${run.highlight}`);
+    if (run.color && hexColor.test(run.color)) styles.push(`color:${run.color}`);
+    if (run.fontSize !== undefined && run.fontSize >= 8 && run.fontSize <= 96) styles.push(`font-size:${run.fontSize}px`);
+    if (run.fontFamily && safeFamily(run.fontFamily)) styles.push(`font-family:${escapeHtml(run.fontFamily)}`);
+    if (run.lineSpacing !== undefined && run.lineSpacing >= 1 && run.lineSpacing <= 2.5) styles.push(`line-height:${run.lineSpacing}`);
+    if (run.letterSpacing !== undefined && run.letterSpacing >= -2 && run.letterSpacing <= 12) styles.push(`letter-spacing:${run.letterSpacing}px`);
+    if (run.textTransform && ['none','uppercase','lowercase'].includes(run.textTransform)) styles.push(`text-transform:${run.textTransform}`);
+    if (run.bold === false) styles.push('font-weight:normal');
+    if (run.italic === false) styles.push('font-style:normal');
     let html = escapeHtml(run.text).replace(/\n/g, '<br>');
     if (run.bold) html = `<strong>${html}</strong>`;
     if (run.italic) html = `<em>${html}</em>`;
     if (run.underline) html = `<u>${html}</u>`;
     if (run.strike) html = `<s>${html}</s>`;
-    if (run.color && hexColor.test(run.color)) html = `<span style="color:${run.color}">${html}</span>`;
-    return style ? `<mark${style}>${html}</mark>` : html;
+    return styles.length ? `<span style="${styles.join(';')}">${html}</span>` : html;
   }).join('');
 }
 
@@ -27,7 +40,7 @@ export function readRichText(root: HTMLElement): RichRun[] {
   const push = (text: string, marks: Marks) => {
     if (!text) return;
     const previous = runs.at(-1);
-    if (previous && previous.bold === marks.bold && previous.italic === marks.italic && previous.underline === marks.underline && previous.strike === marks.strike && previous.highlight === marks.highlight && previous.color === marks.color) previous.text += text;
+    if (previous && previous.bold === marks.bold && previous.italic === marks.italic && previous.underline === marks.underline && previous.strike === marks.strike && previous.highlight === marks.highlight && previous.color === marks.color && previous.fontSize === marks.fontSize && previous.fontFamily === marks.fontFamily && previous.lineSpacing === marks.lineSpacing && previous.letterSpacing === marks.letterSpacing && previous.textTransform === marks.textTransform) previous.text += text;
     else runs.push({ text, ...marks });
   };
   const visit = (node: Node, marks: Marks) => {
@@ -40,12 +53,23 @@ export function readRichText(root: HTMLElement): RichRun[] {
     if (tag === 'i' || tag === 'em' || node.style.fontStyle === 'italic') next.italic = true;
     if (tag === 'u' || node.style.textDecoration.includes('underline')) next.underline = true;
     if (tag === 's' || tag === 'strike' || node.style.textDecoration.includes('line-through')) next.strike = true;
+    if (node.style.textDecoration === 'none' || node.style.textDecorationLine === 'none') { next.underline = false; next.strike = false; }
+    if (node.style.fontWeight === 'normal' || Number(node.style.fontWeight) < 600 && Number(node.style.fontWeight) > 0) next.bold = false;
+    if (node.style.fontStyle === 'normal') next.italic = false;
     const background = normalizeColor(node.style.backgroundColor);
     if (tag === 'mark' || background) {
       if (hexColor.test(background)) next.highlight = background;
     }
     const foreground = normalizeColor(node.style.color);
     if (hexColor.test(foreground)) next.color = foreground;
+    const fontSize = Number.parseFloat(node.style.fontSize);
+    if (Number.isFinite(fontSize) && fontSize >= 8 && fontSize <= 96) next.fontSize = fontSize;
+    if (node.style.fontFamily && safeFamily(node.style.fontFamily)) next.fontFamily = node.style.fontFamily;
+    const lineSpacing = Number.parseFloat(node.style.lineHeight);
+    if (Number.isFinite(lineSpacing) && lineSpacing >= 1 && lineSpacing <= 2.5) next.lineSpacing = lineSpacing;
+    const letterSpacing = Number.parseFloat(node.style.letterSpacing);
+    if (Number.isFinite(letterSpacing) && letterSpacing >= -2 && letterSpacing <= 12) next.letterSpacing = letterSpacing;
+    if (['none','uppercase','lowercase'].includes(node.style.textTransform)) next.textTransform = node.style.textTransform as RichRun['textTransform'];
     const block = ['div', 'p'].includes(tag) && node !== root;
     if (block && runs.length && !runs.at(-1)!.text.endsWith('\n')) push('\n', marks);
     node.childNodes.forEach(child => visit(child, next));

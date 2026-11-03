@@ -84,6 +84,11 @@ function validRichText(value: unknown): boolean {
     && value.every(run => record(run)
     && text(run.text, 1000)
     && ['bold', 'italic', 'underline', 'strike'].every(key => optionalBoolean(run[key]))
+    && optionalFinite(run.fontSize, 8, 96)
+    && optionalText(run.fontFamily, 120)
+    && optionalFinite(run.lineSpacing, 1, 2.5)
+    && optionalFinite(run.letterSpacing, -2, 12)
+    && optionalOneOf(run.textTransform, ['none', 'uppercase', 'lowercase'])
     && (run.highlight === undefined || typeof run.highlight === 'string' && /^#[0-9a-f]{6}$/i.test(run.highlight))
     && (run.color === undefined || typeof run.color === 'string' && /^#[0-9a-f]{6}$/i.test(run.color)));
 }

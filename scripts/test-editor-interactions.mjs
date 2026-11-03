@@ -26,9 +26,15 @@ assert.match(canvas, /map\.layout === 'horizontal'[\s\S]*?sourceHandle: 'source-
 assert.match(canvas, /map\.layout === 'vertical' \|\| map\.layout === 'flowchart'[\s\S]*?sourceHandle: 'source-bottom', targetHandle: 'target-top'/, 'Every vertical tree edge starts at the bottom');
 
 const richCode = ts.transpileModule(await readFile('lib/rich-text.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { richTextHtml } = await import(`data:text/javascript;base64,${Buffer.from(richCode).toString('base64')}`);
+const { richTextHtml, formatWholeText } = await import(`data:text/javascript;base64,${Buffer.from(richCode).toString('base64')}`);
 const colored = richTextHtml('texto', [{ text: 'texto', color: '#123456', highlight: '#ffff00', bold: true }]);
-assert.match(colored, /<mark style="background-color:#ffff00"><span style="color:#123456"><strong>texto<\/strong><\/span><\/mark>/);
+assert.match(colored, /<span style="background-color:#ffff00;color:#123456"><strong>texto<\/strong><\/span>/);
+const partial = [{ text: 'uma ', italic: true }, { text: 'palavra', bold: true }];
+assert.deepEqual(formatWholeText('uma palavra', partial, { highlight: '#ffcc00' }), [
+  { text: 'uma ', italic: true, highlight: '#ffcc00' },
+  { text: 'palavra', bold: true, highlight: '#ffcc00' },
+], 'Whole-text formatting preserves other partial styles');
+assert.match(richTextHtml('x', [{ text: 'x', fontSize: 20, fontFamily: 'Georgia, serif', lineSpacing: 1.5, letterSpacing: 0.4 }]), /font-size:20px;font-family:Georgia, serif;line-height:1.5;letter-spacing:0.4px/);
 assert.doesNotMatch(richTextHtml('x', [{ text: '<script>', color: 'red" onmouseover="evil' }]), /<script>|onmouseover/);
 
 console.log('Interações do editor: Backspace seguro, espaços editáveis, cursor visível, arraste e conexões alinhadas OK.');
