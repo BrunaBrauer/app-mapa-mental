@@ -55,6 +55,17 @@ assert.equal(sizeStyle.height, 90);
 assert.equal(sizeStyle.fontSize, 20);
 assert.equal(sizeStyle.color, undefined, 'Size mode leaves the destination colors untouched');
 assert.match(editor, /command && event\.altKey && key === 'v' && selectedIds\.length/, 'Ctrl+Alt+V applies copied style to the selection');
+assert.match(editor, /window\.addEventListener\('paste', onClipboard\)/, 'Plain text paste is handled through the browser clipboard event');
+assert.match(editor, /application\/x-nodum-branch/, 'Internal branch copies preserve their own clipboard marker');
+assert.match(editor, /parentId: selectedId, text: label/, 'Pasted lines become direct children of the selected node');
+assert.match(editor, /const nodes = layoutMap\(/, 'Pasted nodes follow the active layout');
+assert.doesNotMatch(editor, /selectedId && command && key === 'v'/, 'Ctrl+V must not be swallowed before the clipboard paste event');
+const toolbar = await readFile('components/NodeQuickToolbar.tsx', 'utf8');
+assert.match(toolbar, /'Editar nó',<span className="quick-rounded-node-icon"/, 'Node editing uses the rounded node shape icon');
+const pastedCode = ts.transpileModule(await readFile('lib/paste-text.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { clipboardTextLines } = await import(`data:text/javascript;base64,${Buffer.from(pastedCode).toString('base64')}`);
+assert.deepEqual(clipboardTextLines('Primeiro\r\n\r\n Segundo \nTerceiro'), ['Primeiro', 'Segundo', 'Terceiro']);
+assert.throws(() => clipboardTextLines('x'.repeat(1001)), /1.000 caracteres/);
 
 const notesCode = ts.transpileModule(await readFile('lib/node-notes.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { notesForNode, appendNodeNote, updateNodeNote, removeNodeNote } = await import(`data:text/javascript;base64,${Buffer.from(notesCode).toString('base64')}`);

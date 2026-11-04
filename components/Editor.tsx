@@ -17,6 +17,7 @@ import { downloadDriveFile, driveConfigured, pickDriveFile, preloadDrive, saveMa
 import { parseMapFile, parseMindomoArchive } from '../lib/import-map';
 import { copyNodeFormatting, pickNodeStyle, type FormattingCopyMode } from '../lib/node-style';
 import { appendNodeNote } from '../lib/node-notes';
+import { clipboardTextLines } from '../lib/paste-text';
 import { alignNodes, childMovementSettings, collectNodeDimensions, effectiveAvoidOverlap, reorganizeBranch, type AlignCommand } from '../lib/movement';
 import { applySiblingAlignments, applyVisualStandard, markStyleOverrides, patchVisualNodes, spreadSiblingOverlaps, styleNewNodes, visualScopeIds, type VisualOperation, type VisualScope, type VisualStyleGroup } from '../lib/visual-standardization';
 import { defaultPreferences, normalizePreferences, type Preferences } from '../lib/preferences';
@@ -442,6 +443,54 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
   };
   const quickActionRef = useRef(quickAction);
   useEffect(() => { quickActionRef.current = quickAction; });
+  useEffect(() => {
+    const onClipboard = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable || !active || !selectedId || selectedIds.length !== 1) return;
+      const selectedNode = active.nodes.find(node => node.id === selectedId);
+      if (!selectedNode || !event.clipboardData) return;
+      if (event.type === 'copy' || event.type === 'cut') {
+        event.preventDefault();
+        quickActionRef.current(selectedId, event.type === 'cut' ? 'cut' : 'copy');
+        event.clipboardData.setData('text/plain', selectedNode.text);
+        event.clipboardData.setData('application/x-nodum-branch', active.id);
+        return;
+      }
+      if (event.type !== 'paste') return;
+      // Our own branch copy carries a marker; ordinary clipboard text becomes direct children.
+      if (event.clipboardData.getData('application/x-nodum-branch') === active.id && branchClipboard.current) {
+        event.preventDefault();
+        quickActionRef.current(selectedId, 'paste');
+        return;
+      }
+      const text = event.clipboardData.getData('text/plain');
+      if (!text) return;
+      event.preventDefault();
+      try {
+        const lines = clipboardTextLines(text);
+        if (!lines.length) return;
+        if (active.nodes.length + lines.length > 2000) throw new Error('Este mapa aceita no máximo 2.000 nós.');
+        const siblings = active.nodes.filter(node => node.parentId === selectedId);
+        const reference = active.levelReferences?.find(entry => entry.parentId === selectedId);
+        const line = active.levelConnections?.find(entry => entry.parentId === selectedId);
+        const side = active.layout === 'right' || active.layout === 'horizontal' ? 'right' : selectedNode.side ?? 'right';
+        const children: MindNode[] = lines.map((label, index) => ({
+          icon: '', background: '#ffffff', border: '#000000', color: '#20243b',
+          ...active.defaultNodeStyle, ...reference?.style, ...childMovementSettings(selectedNode),
+          connectionStyle: line?.style, id: uid(), parentId: selectedId, text: label,
+          x: selectedNode.x + (side === 'left' ? -260 : 260),
+          y: selectedNode.y + (siblings.length + index) * 100, side,
+        }));
+        const nodes = layoutMap([...active.nodes.map(node => node.id === selectedId ? { ...node, collapsed: false } : node), ...children], active.layout, active.spacing);
+        commit({ ...active, nodes });
+        selectOne(children[0].id);
+      } catch (error) { window.alert(error instanceof Error ? error.message : 'Não foi possível colar o texto.'); }
+    };
+    window.addEventListener('copy', onClipboard);
+    window.addEventListener('cut', onClipboard);
+    window.addEventListener('paste', onClipboard);
+    return () => { window.removeEventListener('copy', onClipboard); window.removeEventListener('cut', onClipboard); window.removeEventListener('paste', onClipboard); };
+  }, [active, selectedId, selectedIds.length, commit, selectOne]);
   const quickImage = async (id: string, file: File) => { try { const image = await imageData(file); if (!active) return; commit({ ...active, nodes: active.nodes.map(n => n.id === id ? { ...n, image } : n) }); selectOne(id); } catch (error) { window.alert(error instanceof Error ? error.message : 'Não foi possível carregar a imagem.'); } };
   const quickDrivePick = async (id: string, kind: 'image' | 'link') => { if (driveBusy) return; setDriveBusy(true); try { const doc = await pickDriveFile(); if (!doc) return; if (kind === 'link') patchNodeById(id, { url: doc.url || `https://drive.google.com/file/d/${doc.id}/view` }); else { const blob = await downloadDriveFile(doc.id); if (!blob.type.startsWith('image/')) throw new Error('Selecione um arquivo de imagem no Google Drive.'); await quickImage(id, new File([blob], doc.name || 'imagem', { type: blob.type })); } } catch (error) { window.alert(error instanceof Error ? error.message : 'Falha ao abrir o Google Drive.'); } };
   const importFontForNode = async (id: string, file: File) => { const font = await importFontFile(file); setFonts(current => [...current.filter(item => item.id !== font.id), font]); patchNodeById(id, { fontFamily: font.family }); };
@@ -516,10 +565,8 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
       else if (command && key === 'y') { event.preventDefault(); redo(); }
       else if (command && key === 'a' && active) { event.preventDefault(); selectMany(visibleNodes(active.nodes).map(node => node.id)); }
       else if (event.key === 'Escape') { selectMany([]); setRelationSourceId(null); setSelectedEdgeId(null); }
-      else if (selectedId && command && key === 'c') { event.preventDefault(); quickActionRef.current(selectedId, event.shiftKey ? 'copy-style' : 'copy'); }
-      else if (selectedId && command && key === 'x') { event.preventDefault(); quickActionRef.current(selectedId, 'cut'); }
+      else if (selectedId && command && event.shiftKey && key === 'c') { event.preventDefault(); quickActionRef.current(selectedId, 'copy-style'); }
       else if (command && event.altKey && key === 'v' && selectedIds.length) { event.preventDefault(); pasteFormattingRef.current(); }
-      else if (selectedId && command && key === 'v') { event.preventDefault(); quickActionRef.current(selectedId, 'paste'); }
       else if (selectedId && command && key === 'd') { event.preventDefault(); quickActionRef.current(selectedId, 'duplicate'); }
       else if (selectedId && command && key === 'l') { event.preventDefault(); quickActionRef.current(selectedId, 'relationship'); }
       else if (selectedId && event.altKey && event.shiftKey && key === 'm') { event.preventDefault(); quickActionRef.current(selectedId, 'move-branch'); }

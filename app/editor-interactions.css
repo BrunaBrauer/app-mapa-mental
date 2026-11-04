@@ -95,3 +95,4 @@
 .quick-note-delete:hover{background:#ffeced;color:#c53748}
 @media(max-width:1100px){.style-shortcuts .organize{font-size:0;gap:0;padding:7px}.style-shortcuts .organize svg{flex:none}.style-copy-wrap .organize svg:last-child{display:none}}
 @media(max-width:760px){.canvas-bottom{flex-wrap:wrap;justify-content:flex-end}.style-copy-menu{right:-40px;min-width:min(260px,calc(100vw - 30px))}}
+.quick-rounded-node-icon{display:inline-block;width:19px;height:15px;border:1.8px solid currentColor;border-radius:5px;box-sizing:border-box;flex:none}
