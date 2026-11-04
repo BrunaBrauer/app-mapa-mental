@@ -6,23 +6,47 @@ import type { ImportedFont } from '../lib/fonts';
 import StyledEdge from './StyledEdge';
 import type { NodeAction, NodePanel } from './NodeQuickToolbar';
 import type { LineStyle, MindMap, MindNode } from '../types';
-import { branchCounts, branchDirection, descendants, matrixGeometry, swimlaneGeometry, treemapRects, visibleNodes } from '../lib/maps';
+import { branchCounts, branchDirection, descendants, layoutMap, matrixGeometry, packTreeLayout, swimlaneGeometry, treemapRects, visibleNodes } from '../lib/maps';
 import { collectNodeDimensions, effectiveAvoidOverlap, movementModes, projectDrag, reorderAlignedSibling, reorganizeBranch, snapMoveAwayFromOverlap, visualSize } from '../lib/movement';
 import { alignedHandles } from '../lib/edge-geometry';
 import { applySiblingAlignments } from '../lib/visual-standardization';
 import type { VisualOperation, VisualScope, VisualStyleGroup } from '../lib/visual-standardization';
 import type { MovementMode } from '../types';
 
-type Props = { map: MindMap; selectedId: string | null; selectedIds?: string[]; globalMovementMode?: MovementMode; globalAvoidOverlap?: boolean; temporaryBranchId?: string | null; onTemporaryBranchDone?: () => void; onMoveNotice?: (message: string) => void; onSelect: (id: string | null) => void; onSelectMany?: (ids: string[]) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onVisual?: (ids: string[], scope: VisualScope, operation: VisualOperation, value?: number, styleGroups?: VisualStyleGroup[]) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: NodePanel; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
+type Props = { map: MindMap; selectedId: string | null; selectedIds?: string[]; globalMovementMode?: MovementMode; globalAvoidOverlap?: boolean; temporaryBranchId?: string | null; onTemporaryBranchDone?: () => void; onMoveNotice?: (message: string) => void; onSelect: (id: string | null) => void; onSelectMany?: (ids: string[]) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onGeometryChange?: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onVisual?: (ids: string[], scope: VisualScope, operation: VisualOperation, value?: number, styleGroups?: VisualStyleGroup[]) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: NodePanel; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
 const nodeTypes = { mind: MindNodeView };
 const edgeTypes = { styled: StyledEdge };
 const edgeMarker = (symbol: LineStyle['end'], color: string) => symbol === 'arrow' ? { type: MarkerType.ArrowClosed, color, width: 14, height: 14 } : undefined;
 const edgeDash = (style?: LineStyle) => style?.pattern === 'dashed' ? '8 5' : style?.pattern === 'dotted' ? '2 5' : undefined;
-function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] : [], globalMovementMode = 'hierarchical', globalAvoidOverlap = true, temporaryBranchId, onTemporaryBranchDone, onMoveNotice, onSelect, onSelectMany, onSelectEdge, onChange, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
+function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] : [], globalMovementMode = 'hierarchical', globalAvoidOverlap = true, temporaryBranchId, onTemporaryBranchDone, onMoveNotice, onSelect, onSelectMany, onSelectEdge, onChange, onGeometryChange, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
   const dragPositions = useRef(new Map<string, { x: number; y: number; dragging: boolean }>());
+  const measuredSizes = useRef(new Map<string, { width: number; height: number }>());
+  const measuredMapId = useRef(map.id);
+  const geometryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestMap = useRef(map);
+  const geometryChange = useRef(onGeometryChange);
+  useEffect(() => { latestMap.current = map; geometryChange.current = onGeometryChange; }, [map, onGeometryChange]);
+  useEffect(() => { if (geometryTimer.current) clearTimeout(geometryTimer.current); geometryTimer.current = null; }, [map.id]);
+  useEffect(() => () => { if (geometryTimer.current) clearTimeout(geometryTimer.current); }, []);
+  const onMeasured = useCallback((id: string, size: { width: number; height: number }) => {
+    if (measuredMapId.current !== map.id) { measuredSizes.current.clear(); measuredMapId.current = map.id; }
+    const previous = measuredSizes.current.get(id);
+    measuredSizes.current.set(id, size);
+    if (!previous || Math.abs(previous.width - size.width) < 2 && Math.abs(previous.height - size.height) < 2) return;
+    if (geometryTimer.current) clearTimeout(geometryTimer.current);
+    geometryTimer.current = setTimeout(() => {
+      geometryTimer.current = null;
+      const current = latestMap.current;
+      if (!geometryChange.current || ['free', 'network', 'treemap'].includes(current.layout)) return;
+      const nodes = ['matrix', 'swimlane', 'radial', 'concentric', 'cycle', 'fishbone', 'timeline'].includes(current.layout)
+        ? layoutMap(current.nodes, current.layout, current.spacing)
+        : packTreeLayout(current.nodes, current.layout, measuredSizes.current);
+      if (nodes.some((node, index) => Math.abs(node.x - current.nodes[index].x) > 1 || Math.abs(node.y - current.nodes[index].y) > 1)) geometryChange.current({ ...current, nodes });
+    }, 120);
+  }, [map.id]);
   const automaticPreview = useRef(new Map<string, Map<string, { x: number; y: number }>>());
   const [livePositions, setLivePositions] = useState(() => new Map<string, { x: number; y: number; dragging: boolean; source: boolean }>());
   const selectionRef = useRef(selectedIds);
@@ -56,13 +80,13 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
         effectiveMovement: modes.get(item.id) || globalMovementMode,
         inheritedAvoidOverlap: map.avoidOverlap ?? globalAvoidOverlap,
         toolbarVisible: selectedIds.length === 1 && (alwaysToolbar || contextNodeId === item.id || quickPanel?.id === item.id),
-        alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onVisual,
+        alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onMeasured: onGeometryChange ? onMeasured : undefined, onAction, onVisual,
         onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont,
         favoriteIcons: map.favoriteIcons || [], onFavoriteIcons, presets: map.stylePresets || [],
         requestedPanel: quickPanel?.id === item.id ? quickPanel : null,
       },
     }));
-  }, [displayVisible, map, globalMovementMode, globalAvoidOverlap, selectedIds, contextNodeId, quickPanel, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons]);
+  }, [displayVisible, map, globalMovementMode, globalAvoidOverlap, selectedIds, contextNodeId, quickPanel, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onMeasured, onGeometryChange, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons]);
   // Preserve unchanged node/data references during pointer movement.
   const nodes = useMemo(() => baseNodes.map(node => {
     const position = livePositions.get(node.id);
@@ -83,10 +107,14 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
       : (edgeLayout === 'vertical' || edgeLayout === 'flowchart') && target.y > parent.y
         ? { sourceHandle: 'source-bottom', targetHandle: 'target-top' }
         : alignedHandles(parent, target);
-    const line = n.connectionStyle; const color = line?.color || '#b9b4db';
+    const line = n.connectionStyle;
+    const underline = target.shape === 'underline' || parent.shape === 'underline';
+    const underlineColor = target.shape === 'underline' ? target.border : parent.shape === 'underline' ? parent.border : undefined;
+    const color = line?.color || (underlineColor === 'transparent' ? undefined : underlineColor) || (underline ? '#000000' : '#b9b4db');
+    const edgeLine = { ...line, color, width: line?.width ?? (underline ? target.borderWidth ?? parent.borderWidth ?? 2 : 2), pattern: line?.pattern ?? (target.shape === 'underline' ? target.borderStyle : undefined) };
     const label = map.layout === 'flowchart' && parent.flowDecision ? n.flowAnswer === 'yes' ? 'Sim' : n.flowAnswer === 'no' ? 'Não' : undefined
       : map.layout === 'concept' ? n.conceptRelation || 'relaciona-se' : undefined;
-    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: { ...line, color }, route: horizontalTree ? 'horizontal-tree' as const : undefined }, animated: false, style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) };
+    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: edgeLine, route: horizontalTree ? 'horizontal-tree' as const : undefined }, animated: false, style: { stroke: color, strokeWidth: edgeLine.width, strokeDasharray: edgeDash(edgeLine) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? (target.shape === 'underline' ? 'none' : 'arrow'), color) };
     });
     const cycle = stages.length < 2 ? [] : stages.map((stage, index) => {
       const target = stages[(index + 1) % stages.length];

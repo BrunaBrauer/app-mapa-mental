@@ -290,13 +290,21 @@ export function branchDirection(node: MindNode, children: MindNode[], layout: La
 }
 type Bounds = { left: number; top: number; right: number; bottom: number };
 const treeLayouts: LayoutMode[] = ['horizontal', 'right', 'left', 'balanced', 'bilateral', 'vertical', 'down', 'up', 'org', 'org-left', 'flowchart', 'split-down'];
-function layoutSize(node: MindNode): { width: number; height: number } {
-  const width = node.width ?? (node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 205 : node.shape === 'ellipse' ? 175 : !node.parentId && !node.floating ? 182 : 145);
+export function layoutSize(node: MindNode): { width: number; height: number } {
+  const declaredWidth = node.width ?? (node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 205 : node.shape === 'ellipse' ? 175 : !node.parentId && !node.floating ? 182 : 145);
   const baseHeight = node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 118 : node.shape === 'ellipse' ? 74 : !node.parentId && !node.floating ? 62 : 50;
-  const textWidth = Math.max(40, width - (node.paddingLeft ?? node.padding ?? 14) - (node.paddingRight ?? node.padding ?? 14) - 4);
-  const lineCount = node.wrapText === false ? 1 : Math.max(1, Math.ceil(node.text.length * (node.fontSize ?? 14) * .56 / textWidth));
-  const textHeight = lineCount * (node.fontSize ?? 14) * (node.lineSpacing ?? 1.3) + (node.paddingTop ?? node.padding ?? 10) + (node.paddingBottom ?? node.padding ?? 10) + (node.borderWidth ?? 2) * 2;
-  return { width: Math.max(width, node.minWidth ?? 0), height: Math.max(node.height ?? Math.max(baseHeight, textHeight + (node.image ? 120 : 0)), node.minHeight ?? 0) };
+  const fontSize = Math.max(node.fontSize ?? (!node.parentId ? 18 : 14), ...(node.richText || []).map(run => run.fontSize ?? 0));
+  const lineSpacing = Math.max(node.lineSpacing ?? 1.3, ...(node.richText || []).map(run => run.lineSpacing ?? 0));
+  const sidePadding = (node.paddingLeft ?? node.padding ?? 14) + (node.paddingRight ?? node.padding ?? 14);
+  const attachmentWidth = (node.icon ? 24 : 0) + (node.note ? 20 : 0) + (node.comments?.length ? 28 : 0) + (node.url ? 20 : 0) + (node.task ? 22 : 0);
+  const naturalWidth = Math.max(...node.text.split(/\r?\n/).map(line => line.length * fontSize * .6)) + sidePadding + attachmentWidth + 4;
+  const width = node.wrapText === false ? Math.max(declaredWidth, naturalWidth) : declaredWidth;
+  const textWidth = Math.max(28, width - sidePadding - attachmentWidth - 4);
+  const lineCount = node.text.split(/\r?\n/).reduce((sum, line) => sum + (node.wrapText === false ? 1 : Math.max(1, Math.ceil(line.length * fontSize * .6 / textWidth))), 0);
+  const textHeight = lineCount * fontSize * lineSpacing + (node.paddingTop ?? node.padding ?? 10) + (node.paddingBottom ?? node.padding ?? 10) + (node.borderWidth ?? 2) * 2;
+  const attachmentsHeight = attachmentWidth > width - sidePadding - 35 ? 22 : 0;
+  const extraHeight = (node.label ? 18 : 0) + (node.equation ? 22 : 0) + (node.mediaUrl ? 20 : 0) + (node.image ? 127 : 0);
+  return { width: Math.max(width, node.minWidth ?? 0), height: Math.max(node.height ?? 0, baseHeight, textHeight + attachmentsHeight + extraHeight, node.minHeight ?? 0) };
 }
 export function matrixGeometry(nodes: MindNode[]) {
   const root = nodes.find(node => !node.parentId && !node.floating);
@@ -322,7 +330,7 @@ export function swimlaneGeometry(nodes: MindNode[]) {
     rowGap: Math.max(130, ...visible.map(node => layoutSize(node).height + 40)),
   };
 }
-export function packTreeLayout(nodes: MindNode[], layout: LayoutMode): MindNode[] {
+export function packTreeLayout(nodes: MindNode[], layout: LayoutMode, dimensions?: Map<string, { width: number; height: number }>): MindNode[] {
   if (!treeLayouts.includes(layout) || nodes.length < 2) return nodes;
   const result = nodes.map(node => ({ ...node }));
   const visible = visibleNodes(result);
@@ -335,9 +343,10 @@ export function packTreeLayout(nodes: MindNode[], layout: LayoutMode): MindNode[
   }
   const branch = new Map<string, MindNode[]>();
   const visiting = new Set<string>();
+  const size = (node: MindNode) => dimensions?.get(node.id) || layoutSize(node);
   const box = (node: MindNode): Bounds => {
-    const size = layoutSize(node);
-    return { left: node.x, top: node.y, right: node.x + size.width, bottom: node.y + size.height };
+    const actual = size(node);
+    return { left: node.x, top: node.y, right: node.x + actual.width, bottom: node.y + actual.height };
   };
   const bounds = (items: MindNode[]): Bounds => items.reduce((area, node) => {
     const current = box(node);
@@ -391,8 +400,8 @@ export function packTreeLayout(nodes: MindNode[], layout: LayoutMode): MindNode[
     if (descendants.length && !node.positionLocked) {
       const direct = children.get(node.id)!;
       const horizontal = [...groups.keys()].every(side => side === 'right' || side === 'left');
-      if (horizontal) node.y = (direct[0].y + layoutSize(direct[0]).height / 2 + direct[direct.length - 1].y + layoutSize(direct[direct.length - 1]).height / 2) / 2 - layoutSize(node).height / 2;
-      else node.x = (direct[0].x + layoutSize(direct[0]).width / 2 + direct[direct.length - 1].x + layoutSize(direct[direct.length - 1]).width / 2) / 2 - layoutSize(node).width / 2;
+      if (horizontal) node.y = (direct[0].y + size(direct[0]).height / 2 + direct[direct.length - 1].y + size(direct[direct.length - 1]).height / 2) / 2 - size(node).height / 2;
+      else node.x = (direct[0].x + size(direct[0]).width / 2 + direct[direct.length - 1].x + size(direct[direct.length - 1]).width / 2) / 2 - size(node).width / 2;
     }
     const items = [node, ...descendants];
     branch.set(node.id, items);

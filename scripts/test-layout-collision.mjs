@@ -4,7 +4,7 @@ import ts from 'typescript';
 
 const source = await readFile('lib/maps.ts', 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { layoutConflictCount, layoutMap, visibleNodes } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const { layoutConflictCount, layoutMap, layoutSize, packTreeLayout, visibleNodes } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const node = (id, parentId, width = 145, height = 50, extras = {}) => ({ id, parentId, text: id, x: 0, y: 0, width, height, ...extras });
 const sourceNodes = [
   node('root', null, 182, 62),
@@ -30,6 +30,11 @@ for (const mode of ['horizontal', 'right', 'left', 'balanced', 'down', 'up', 've
 const horizontal = visibleNodes(layoutMap(sourceNodes, 'horizontal'));
 assert.deepEqual(sourceNodes.map(item => [item.x, item.y]), originalPositions, 'Reorganization does not mutate saved snapshots');
 assert.deepEqual(layoutMap(horizontal, 'horizontal').map(item => [item.x, item.y]), horizontal.map(item => [item.x, item.y]), 'Reorganization is stable when repeated');
+const longText = node('long', 'root', 100, 36, { text: 'Uma frase extensa com várias palavras e uma segunda linha\nque precisa aparecer integralmente.', note: 'Nota disponível no ícone', comments: [{ id: 'comment', text: 'Comentário', createdAt: 0 }] });
+assert.ok(layoutSize(longText).height > longText.height, 'User height acts as a minimum; wrapped text and attachment icons remain visible');
+assert.ok(layoutSize({ ...longText, wrapText: false }).width > longText.width, 'Opting out of wrapping expands width instead of clipping the title');
+const measured = packTreeLayout([node('root', null), node('a', 'root', 145, 50, { x: 260 }), node('b', 'root', 145, 50, { x: 260, y: 100 })], 'horizontal', new Map([['a', { width: 145, height: 240 }]]));
+assert.ok(measured[2].y >= measured[1].y + 240 + 28, 'Measured content height pushes the sibling branch below it');
 for (const child of horizontal.filter(item => item.parentId)) {
   const parent = horizontal.find(item => item.id === child.parentId);
   if (parent.branchLayout && parent.branchLayout !== 'horizontal') continue;

@@ -1,5 +1,5 @@
 import type { LayoutMode, MindMap, MindNode, MovementMode } from '../types';
-import { layoutBranch, layoutMap, packTreeLayout, visibleNodes } from './maps';
+import { layoutBranch, layoutMap, layoutSize, packTreeLayout, visibleNodes } from './maps';
 
 export type Point = { x: number; y: number };
 export type NodeDimensions = Map<string, { width: number; height: number }>;
@@ -138,9 +138,7 @@ export function collectNodeDimensions(): NodeDimensions {
 export function visualSize(node: MindNode, dimensions?: NodeDimensions): { width: number; height: number } {
   const measured = dimensions?.get(node.id);
   if (measured) return measured;
-  const width = node.width || (node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 205 : node.shape === 'ellipse' ? 175 : !node.parentId && !node.floating ? 182 : 145);
-  const height = node.height ?? ((node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 118 : node.shape === 'ellipse' ? 74 : !node.parentId && !node.floating ? 62 : 50) + (node.image ? 120 : 0));
-  return { width, height };
+  return layoutSize(node);
 }
 
 export function overlappingIds(nodes: MindNode[], movedIds: Set<string>, gap = 12, dimensions?: NodeDimensions): Set<string> {
