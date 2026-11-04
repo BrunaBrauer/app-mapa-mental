@@ -6,7 +6,7 @@ const compile = async path => ts.transpileModule(await readFile(path, 'utf8'), {
 const url = code => `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
 const movementUrl = url((await compile('lib/movement.ts')).replace("'./maps'", JSON.stringify(url(await compile('lib/maps.ts')))));
 const movement = await import(movementUrl);
-const { effectiveMovementMode, movementModes, childMovementSettings, projectDrag, reorderAlignedSibling, reorganizeBranch, alignNodes, snapMoveAwayFromOverlap, overlappingIds, visualSize } = movement;
+const { effectiveMovementMode, movementModes, childMovementSettings, projectDrag, reparentBranch, reorderAlignedSibling, reorganizeBranch, alignNodes, snapMoveAwayFromOverlap, overlappingIds, visualSize } = movement;
 const { alignedHandles } = await import(url((await compile('lib/edge-geometry.ts')).replace("'./movement'", JSON.stringify(movementUrl))));
 const nodes = [
   { id: 'root', parentId: null, text: 'Centro', x: 0, y: 0 },
@@ -33,6 +33,22 @@ assert.equal(projectDrag(map, requested, 'individual', 'branch').positions.get('
 assert.equal(projectDrag(map, requested, 'automatic').automaticRoots[0], 'branch');
 const locked = { ...map, nodes: nodes.map(node => node.id === 'leaf' ? { ...node, positionLocked: true } : node) };
 assert.equal(projectDrag(locked, requested, 'hierarchical').positions.size, 0);
+const reparented = reparentBranch(map, 'branch', 'other');
+assert.equal(reparented.changed, true);
+assert.equal(reparented.map.nodes.find(node => node.id === 'branch').parentId, 'other');
+assert.equal(reparented.map.nodes.find(node => node.id === 'leaf').parentId, 'branch', 'The dragged subtree keeps its internal hierarchy');
+assert.equal(reparented.map.nodes.find(node => node.id === 'other').parentId, 'root');
+assert.equal(reparentBranch(map, 'branch', 'leaf').changed, false, 'A branch cannot become a descendant of itself');
+assert.equal(reparentBranch(map, 'root', 'other').changed, false, 'The central node cannot be reparented');
+assert.equal(reparentBranch(locked, 'branch', 'other').changed, false, 'A locked descendant prevents moving the branch');
+const collapsedParent = reparentBranch({ ...map, nodes: nodes.map(node => node.id === 'other' ? { ...node, collapsed: true } : node) }, 'branch', 'other');
+assert.equal(collapsedParent.map.nodes.find(node => node.id === 'other').collapsed, false, 'The destination opens to reveal its new child');
+const freeReparent = reparentBranch({ ...map, layout: 'network' }, 'branch', 'other');
+const freeBranch = freeReparent.map.nodes.find(node => node.id === 'branch');
+const freeLeaf = freeReparent.map.nodes.find(node => node.id === 'leaf');
+assert.ok(freeBranch.x >= nodes[3].x + visualSize(nodes[3]).width + 72, 'Free layout places the new child beside its parent');
+assert.equal(freeLeaf.x - freeBranch.x, nodes[2].x - nodes[1].x, 'Free layout preserves descendant offsets');
+assert.equal(freeLeaf.y - freeBranch.y, nodes[2].y - nodes[1].y);
 assert.match(projectDrag(locked, requested, 'hierarchical').blocked, /bloqueada/);
 
 const droppedFirst = { ...map, siblingReorder: true, nodes: nodes.map(node => node.id === 'other' ? { ...node, y: -200 } : node) };

@@ -63,6 +63,33 @@ export function childMovementSettings(parent: MindNode): Pick<MindNode, 'inherit
   return { inheritMovement: parent.inheritMovementToChildren !== false };
 }
 
+/** Change a branch's parent without changing its descendants or their content. */
+export function reparentBranch(map: MindMap, sourceId: string, parentId: string): { map: MindMap; changed: boolean; reason?: string } {
+  const source = map.nodes.find(node => node.id === sourceId);
+  const parent = map.nodes.find(node => node.id === parentId);
+  if (!source || !parent || sourceId === parentId) return { map, changed: false, reason: 'Selecione dois nós diferentes.' };
+  if (!source.parentId && !source.floating) return { map, changed: false, reason: 'O nó central não pode mudar de nível.' };
+  if (parent.floating) return { map, changed: false, reason: 'Uma ideia flutuante não pode receber um ramo hierárquico.' };
+  if (source.parentId === parentId && !source.floating) return { map, changed: false };
+  const branch = branchIds(sourceId, childrenOf(map.nodes));
+  if (branch.has(parentId)) return { map, changed: false, reason: 'Um nó não pode ser filho de um de seus descendentes.' };
+  if ([...branch].some(id => map.nodes.find(node => node.id === id)?.positionLocked)) return { map, changed: false, reason: 'Desbloqueie as posições deste ramo antes de mudar seu nível.' };
+  const side = source.x < parent.x ? 'left' as const : 'right' as const;
+  const free = map.layout === 'free' || map.layout === 'network';
+  const parentSize = visualSize(parent), sourceSize = visualSize(source);
+  const targetX = side === 'right' ? parent.x + parentSize.width + 72 : parent.x - sourceSize.width - 72;
+  const targetY = parent.y + (parentSize.height - sourceSize.height) / 2;
+  const dx = free ? targetX - source.x : 0, dy = free ? targetY - source.y : 0;
+  const nodes = map.nodes.map(node => {
+    if (node.id === sourceId) return { ...node, x: node.x + dx, y: node.y + dy, parentId, floating: false, side, flowAnswer: undefined };
+    if (node.id === parentId && node.collapsed) return { ...node, collapsed: false };
+    return free && branch.has(node.id) ? { ...node, x: node.x + dx, y: node.y + dy } : node;
+  });
+  if (!free) return { map: { ...map, nodes: layoutMap(nodes, map.layout, map.spacing) }, changed: true };
+  const settled = snapMoveAwayFromOverlap({ ...map, nodes }, branch);
+  return settled.blocked ? { map, changed: false, reason: 'Não há espaço livre para mover este ramo junto ao novo pai.' } : { map: settled.map, changed: true };
+}
+
 export function projectDrag(map: MindMap, requested: Map<string, Point>, globalMode: MovementMode, temporaryBranchId?: string | null): { positions: Map<string, Point>; automaticRoots: string[]; blocked?: string } {
   const byId = new Map(map.nodes.map(node => [node.id, node]));
   const children = childrenOf(map.nodes);

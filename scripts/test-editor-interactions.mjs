@@ -22,6 +22,8 @@ assert.match(css, /react-flow__node\.draggable\.dragging \.mind-node\{cursor:gra
 assert.match(canvas, /map\.siblingReorder && requested\.size === 1/, 'Aligned reordering must be opt-in');
 assert.match(movementSettings, /checked=\{Boolean\(map\.siblingReorder\)\}/, 'The map must expose an aligned-reordering toggle');
 for (const side of ['left', 'right', 'top', 'bottom']) assert.match(nodeView, new RegExp(`type="target" id="target-${side}"`), `Tree edges need a registered ${side} target handle`);
+assert.match(nodeView, /node-underline-rule[\s\S]*?item\.connectionStyle\?\.width[\s\S]*?item\.connectionStyle\?\.pattern[\s\S]*?item\.connectionStyle\?\.color/, 'The underlined rule follows the incoming line width, pattern and color');
+assert.match(canvas, /reparentBranch\(next, sourceId, targetId\)/, 'Dropping one node over another updates the hierarchy');
 assert.match(canvas, /const edgeLayout = parent\.branchLayout \|\| map\.layout/, 'Connections follow the parent branch layout');
 assert.match(canvas, /horizontalTree[\s\S]*?sourceHandle: 'source-right', targetHandle: 'target-left'/, 'Horizontal tree edges start on the right when the child is actually to the right');
 assert.match(canvas, /edgeLayout === 'vertical' \|\| edgeLayout === 'flowchart'[\s\S]*?sourceHandle: 'source-bottom', targetHandle: 'target-top'/, 'Vertical tree edges start at the bottom');
@@ -37,5 +39,18 @@ assert.deepEqual(formatWholeText('uma palavra', partial, { highlight: '#ffcc00' 
 ], 'Whole-text formatting preserves other partial styles');
 assert.match(richTextHtml('x', [{ text: 'x', fontSize: 20, fontFamily: 'Georgia, serif', lineSpacing: 1.5, letterSpacing: 0.4 }]), /font-size:20px;font-family:Georgia, serif;line-height:1.5;letter-spacing:0.4px/);
 assert.doesNotMatch(richTextHtml('x', [{ text: '<script>', color: 'red" onmouseover="evil' }]), /<script>|onmouseover/);
+
+const styleCode = ts.transpileModule(await readFile('lib/node-style.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { copyNodeFormatting } = await import(`data:text/javascript;base64,${Buffer.from(styleCode).toString('base64')}`);
+const sourceStyle = { id: 'styled', parentId: 'root', text: 'Styled', x: 0, y: 0, width: 230, height: 90, padding: 18, fontSize: 20, border: '#ff0000', connectionStyle: { color: '#ff0000', width: 4, pattern: 'dashed' } };
+const fullStyle = copyNodeFormatting(sourceStyle, true);
+const withoutDimensions = copyNodeFormatting(sourceStyle, false);
+assert.equal(fullStyle.width, 230);
+assert.equal(fullStyle.height, 90);
+assert.equal(withoutDimensions.width, undefined);
+assert.equal(withoutDimensions.height, undefined);
+assert.equal(withoutDimensions.padding, 18, 'Padding remains part of visual formatting');
+assert.equal(withoutDimensions.connectionStyle.pattern, 'dashed', 'Connection formatting is copied with the node');
+assert.equal(withoutDimensions.fontSize, 20);
 
 console.log('Interações do editor: Backspace seguro, espaços editáveis, cursor visível, arraste e conexões alinhadas OK.');

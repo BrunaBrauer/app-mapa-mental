@@ -26,6 +26,7 @@ export default function MovementSettings({ map, globalMode, globalAvoidOverlap, 
       <label className="movement-check"><input type="checkbox" checked={Boolean(map.siblingReorder)} onChange={event => onMapPatch({ siblingReorder: event.target.checked })}/> Reordenar subnós mantendo alinhamento</label>
       <small>Quando a reordenação está ligada, arraste um subnó entre seus irmãos para trocar a ordem sem alterar tamanhos ou estilos. Desligue para voltar ao posicionamento livre.</small>
       <small>O modo hierárquico move o nó e seus descendentes como um conjunto. Nós bloqueados impedem o arraste do ramo.</small>
+      <small>Para mudar um ramo de nível, arraste seu nó sobre o novo nó pai. O contorno verde indica um destino válido. O nó central e os descendentes do ramo não podem ser destinos.</small>
     </div>}
   </div>;
 }

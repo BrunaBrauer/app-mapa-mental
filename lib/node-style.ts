@@ -8,3 +8,10 @@ export function pickNodeStyle(node: MindNode, mode: 'size' | 'format' | 'both' =
   for (const key of keys) (style as Record<string, unknown>)[key] = node[key];
   return style;
 }
+
+export function copyNodeFormatting(node: MindNode, includeDimensions: boolean): Partial<MindNode> {
+  const style: Partial<MindNode> = { ...pickNodeStyle(node), connectionStyle: node.connectionStyle ? { ...node.connectionStyle } : undefined };
+  if (includeDimensions) style.sizeMode = node.sizeMode;
+  else for (const key of ['width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight'] as const) delete style[key];
+  return style;
+}
