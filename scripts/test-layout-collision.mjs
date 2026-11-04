@@ -49,6 +49,27 @@ assert.ok(Math.abs(leftInline[0].y + layoutSize(leftInline[0]).height / 2 - base
 assert.deepEqual(packTreeLayout(narrowed, 'horizontal').map(item => item.y), narrowed.map(item => item.y), 'Repeated packing preserves the underline alignment');
 const measuredInline = packTreeLayout([inlineSource, inlineChild], 'horizontal', new Map([[inlineChild.id, { width: 210, height: 180 }]]));
 assert.ok(Math.abs(measuredInline[0].y + layoutSize(measuredInline[0]).height / 2 - measuredInline[1].y - 179) < 1, 'The measured text height realigns the underline');
+const spaced = [node('space-root', null, 180, 62), node('space-a', 'space-root', 150, 50, { x: 700 }), node('space-b', 'space-a', 140, 50, { x: 1400 })];
+const compact = packTreeLayout(spaced, 'horizontal');
+assert.equal(compact[1].x, compact[0].x + layoutSize(compact[0]).width + 72, 'The first level uses the standardized connection gap');
+assert.equal(compact[2].x, compact[1].x + layoutSize(compact[1]).width + 72, 'An inherited oversized gap is compacted at the next level');
+const grown = packTreeLayout(spaced.map(item => item.id === 'space-a' ? { ...item, width: 330 } : item), 'horizontal');
+assert.equal(grown[2].x - grown[1].x, layoutSize(grown[1]).width + 72, 'A wider parent pushes its descendants while preserving the gap');
+const measuredWidth = packTreeLayout(spaced, 'horizontal', new Map([['space-a', { width: 275, height: 50 }]]));
+assert.equal(measuredWidth[2].x - measuredWidth[1].x, 275 + 72, 'Actual rendered width governs the following level');
+const compactSpacing = packTreeLayout(spaced, 'horizontal', undefined, { x: 210, y: 82 });
+const wideSpacing = packTreeLayout(spaced, 'horizontal', undefined, { x: 320, y: 150 });
+assert.equal(compactSpacing[1].x - compactSpacing[0].x - layoutSize(compactSpacing[0]).width, 48, 'Compact spacing keeps a usable minimum connection channel');
+assert.equal(wideSpacing[1].x - wideSpacing[0].x - layoutSize(wideSpacing[0]).width, 132, 'Wide spacing remains available when selected');
+assert.deepEqual(packTreeLayout(compact, 'horizontal').map(item => item.x), compact.map(item => item.x), 'Compact columns remain stable on repeated layout');
+const mixedWidths = packTreeLayout([node('m-root', null, 180, 62), node('wide', 'm-root', 310, 60, { x: 800 }), node('narrow', 'm-root', 120, 60, { x: 800, y: 250 }), node('wide-child', 'wide', 130, 50, { x: 1600 }), node('narrow-child', 'narrow', 130, 50, { x: 1600, y: 250 })], 'horizontal');
+const byName = new Map(mixedWidths.map(item => [item.id, item]));
+assert.equal(byName.get('wide-child').x, byName.get('narrow-child').x, 'Second-level siblings share a column');
+assert.ok(byName.get('narrow-child').x >= byName.get('wide').x + 310 + 72, 'The widest preceding node determines the next column');
+for (let i = 0; i < mixedWidths.length; i++) for (let j = i + 1; j < mixedWidths.length; j++) assert.ok(!overlaps(mixedWidths[i], mixedWidths[j]), 'Compaction does not overlap neighboring branches');
+const verticalCompact = packTreeLayout([node('v-root', null, 180, 62), node('v-a', 'v-root', 150, 80, { y: 600 }), node('v-b', 'v-a', 140, 50, { y: 1200 })], 'down');
+assert.equal(verticalCompact[1].y, verticalCompact[0].y + layoutSize(verticalCompact[0]).height + 72, 'Vertical levels use the same minimum gap');
+assert.equal(verticalCompact[2].y, verticalCompact[1].y + layoutSize(verticalCompact[1]).height + 72, 'Vertical resizing also compacts descendants');
 for (const child of horizontal.filter(item => item.parentId)) {
   const parent = horizontal.find(item => item.id === child.parentId);
   if (parent.branchLayout && parent.branchLayout !== 'horizontal') continue;

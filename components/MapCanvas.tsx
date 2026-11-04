@@ -45,7 +45,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
       if (!geometryChange.current || ['free', 'network', 'treemap'].includes(current.layout)) return;
       const nodes = ['matrix', 'swimlane', 'radial', 'concentric', 'cycle', 'fishbone', 'timeline'].includes(current.layout)
         ? layoutMap(current.nodes, current.layout, current.spacing)
-        : packTreeLayout(current.nodes, current.layout, measuredSizes.current);
+        : packTreeLayout(current.nodes, current.layout, measuredSizes.current, current.spacing);
       if (nodes.some((node, index) => Math.abs(node.x - current.nodes[index].x) > 1 || Math.abs(node.y - current.nodes[index].y) > 1)) geometryChange.current({ ...current, nodes });
     }, 120);
   }, [map.id]);

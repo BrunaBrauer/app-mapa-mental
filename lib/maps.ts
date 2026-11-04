@@ -246,7 +246,7 @@ export function layoutMap(nodes: MindNode[], mode: LayoutMode, spacing = { x: 26
   if (!['matrix', 'swimlane', 'treemap'].includes(mode)) nodes.filter(node => node.branchLayout && node.branchLayout !== 'free' && node.branchLayout !== 'network').forEach(node => { result = layoutBranch(result, node.id, node.branchLayout!, spacing); });
   const originalPositions = new Map(nodes.filter(node => node.positionLocked).map(node => [node.id, { x: node.x, y: node.y }]));
   const anchored = result.map(node => originalPositions.has(node.id) ? { ...node, ...originalPositions.get(node.id)! } : node);
-  return spaceDiagramLayout(packTreeLayout(anchored, mode), mode);
+  return spaceDiagramLayout(packTreeLayout(anchored, mode, undefined, spacing), mode);
 }
 export function descendants(nodes: MindNode[], id: string): Set<string> {
   const found = new Set([id]); let changed = true;
@@ -330,7 +330,7 @@ export function swimlaneGeometry(nodes: MindNode[]) {
     rowGap: Math.max(130, ...visible.map(node => layoutSize(node).height + 40)),
   };
 }
-export function packTreeLayout(nodes: MindNode[], layout: LayoutMode, dimensions?: Map<string, { width: number; height: number }>): MindNode[] {
+export function packTreeLayout(nodes: MindNode[], layout: LayoutMode, dimensions?: Map<string, { width: number; height: number }>, spacing = { x: 260, y: 112 }): MindNode[] {
   if (!treeLayouts.includes(layout) || nodes.length < 2) return nodes;
   const result = nodes.map(node => ({ ...node }));
   const visible = visibleNodes(result);
@@ -358,6 +358,50 @@ export function packTreeLayout(nodes: MindNode[], layout: LayoutMode, dimensions
     if (!dx && !dy || items.some(item => item.positionLocked || item.branchLayout === 'free' || item.branchLayout === 'network')) return;
     for (const item of items) { item.x += dx; item.y += dy; }
   };
+  const subtree = (start: MindNode): MindNode[] => {
+    const found: MindNode[] = []; const seen = new Set<string>(); const pending = [start];
+    while (pending.length) {
+      const current = pending.pop()!;
+      if (seen.has(current.id)) continue;
+      seen.add(current.id); found.push(current);
+      pending.push(...(children.get(current.id) || []));
+    }
+    return found;
+  };
+  const gapFor = (side: BranchDirection) => side === 'right' || side === 'left'
+    ? Math.max(48, spacing.x - 188) : Math.max(48, spacing.y - 40);
+  // Size-based columns/rows can move both inward and outward. The later subtree
+  // packing pass resolves perpendicular collisions without widening every level.
+  for (const root of visible.filter(node => !node.parentId && !node.floating)) {
+    const lanes = new Map<BranchDirection, MindNode[][]>();
+    const pending = (children.get(root.id) || []).map(child => ({ parent: root, child, depth: 1, side: branchDirection(root, [child], layout) }));
+    const seen = new Set<string>();
+    while (pending.length) {
+      const { parent, child, depth, side } = pending.shift()!;
+      if (seen.has(child.id) || branchDirection(parent, [child], layout) !== side) continue;
+      seen.add(child.id);
+      const levels = lanes.get(side) || [];
+      (levels[depth] ||= []).push(child);
+      lanes.set(side, levels);
+      for (const next of children.get(child.id) || []) pending.push({ parent: child, child: next, depth: depth + 1, side });
+    }
+    for (const [side, levels] of lanes) {
+      const horizontal = side === 'right' || side === 'left';
+      let edge = side === 'right' ? root.x + size(root).width : side === 'left' ? root.x : side === 'bottom' ? root.y + size(root).height : root.y;
+      for (let depth = 1; depth < levels.length; depth++) {
+        const members = levels[depth] || [];
+        if (!members.length) continue;
+        const extent = Math.max(...members.map(node => horizontal ? size(node).width : size(node).height));
+        const gap = gapFor(side);
+        const coordinate = side === 'right' || side === 'bottom' ? edge + gap : edge - gap - extent;
+        for (const member of members) {
+          const delta = coordinate - (horizontal ? member.x : member.y);
+          move(subtree(member), horizontal ? delta : 0, horizontal ? 0 : delta);
+        }
+        edge = side === 'right' || side === 'bottom' ? coordinate + extent : coordinate;
+      }
+    }
+  }
   const visit = (node: MindNode): MindNode[] => {
     if (branch.has(node.id)) return branch.get(node.id)!;
     if (visiting.has(node.id)) return [node];
@@ -386,7 +430,7 @@ export function packTreeLayout(nodes: MindNode[], layout: LayoutMode, dimensions
         const items = branch.get(child.id) || [child];
         let area = bounds(items);
         const parent = box(node);
-        const gap = 72;
+        const gap = gapFor(side);
         const dx = side === 'right' ? Math.max(0, parent.right + gap - area.left) : side === 'left' ? Math.min(0, parent.left - gap - area.right) : 0;
         const dy = side === 'bottom' ? Math.max(0, parent.bottom + gap - area.top) : side === 'top' ? Math.min(0, parent.top - gap - area.bottom) : 0;
         move(items, dx, dy);

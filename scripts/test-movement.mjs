@@ -6,7 +6,7 @@ const compile = async path => ts.transpileModule(await readFile(path, 'utf8'), {
 const url = code => `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
 const movementUrl = url((await compile('lib/movement.ts')).replace("'./maps'", JSON.stringify(url(await compile('lib/maps.ts')))));
 const movement = await import(movementUrl);
-const { effectiveMovementMode, movementModes, childMovementSettings, projectDrag, reorderAlignedSibling, reorganizeBranch, alignNodes, snapMoveAwayFromOverlap, overlappingIds } = movement;
+const { effectiveMovementMode, movementModes, childMovementSettings, projectDrag, reorderAlignedSibling, reorganizeBranch, alignNodes, snapMoveAwayFromOverlap, overlappingIds, visualSize } = movement;
 const { alignedHandles } = await import(url((await compile('lib/edge-geometry.ts')).replace("'./movement'", JSON.stringify(movementUrl))));
 const nodes = [
   { id: 'root', parentId: null, text: 'Centro', x: 0, y: 0 },
@@ -49,7 +49,7 @@ const messy = { ...map, nodes: nodes.map(node => node.id === 'leaf' ? { ...node,
 const organized = reorganizeBranch(messy, 'branch', false);
 assert.equal(organized.nodes.find(node => node.id === 'root').x, 0);
 assert.equal(organized.nodes.find(node => node.id === 'other').y, 200);
-assert.equal(organized.nodes.find(node => node.id === 'leaf').x, 520);
+assert.equal(organized.nodes.find(node => node.id === 'leaf').x, organized.nodes.find(node => node.id === 'branch').x + visualSize(organized.nodes.find(node => node.id === 'branch')).width + 72);
 assert.equal(organized.nodes.find(node => node.id === 'leaf').y, 0);
 const lockedOrganized = reorganizeBranch({ ...messy, nodes: messy.nodes.map(node => node.id === 'leaf' ? { ...node, positionLocked: true } : node) }, 'branch', true);
 assert.equal(lockedOrganized.nodes.find(node => node.id === 'leaf').y, 400);

@@ -261,7 +261,7 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
     if (record && prepared.layout !== 'free' && prepared.layout !== 'network' && changedNodeGeometry(previous, prepared)) {
       prepared = { ...prepared, nodes: ['matrix', 'swimlane', 'radial', 'concentric', 'cycle', 'fishbone', 'timeline', 'treemap'].includes(prepared.layout)
         ? layoutMap(prepared.nodes, prepared.layout, prepared.spacing)
-        : packTreeLayout(prepared.nodes, prepared.layout) };
+        : packTreeLayout(prepared.nodes, prepared.layout, undefined, prepared.spacing) };
     }
     const fresh = { ...prepared, updatedAt: Date.now() };
     setMaps(current => current.map(map => map.id === next.id ? fresh : map));
