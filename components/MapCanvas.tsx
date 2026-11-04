@@ -6,7 +6,7 @@ import type { ImportedFont } from '../lib/fonts';
 import StyledEdge from './StyledEdge';
 import type { NodeAction, NodePanel } from './NodeQuickToolbar';
 import type { LineStyle, MindMap, MindNode } from '../types';
-import { branchCounts, branchDirection, descendants, layoutMap, matrixGeometry, packTreeLayout, swimlaneGeometry, treemapRects, visibleNodes } from '../lib/maps';
+import { branchCounts, branchDirection, descendants, layoutMap, layoutSize, matrixGeometry, packTreeLayout, swimlaneGeometry, treemapRects, visibleNodes } from '../lib/maps';
 import { collectNodeDimensions, effectiveAvoidOverlap, movementModes, projectDrag, reorderAlignedSibling, reorganizeBranch, snapMoveAwayFromOverlap, visualSize } from '../lib/movement';
 import { alignedHandles } from '../lib/edge-geometry';
 import { applySiblingAlignments } from '../lib/visual-standardization';
@@ -35,7 +35,9 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     if (measuredMapId.current !== map.id) { measuredSizes.current.clear(); measuredMapId.current = map.id; }
     const previous = measuredSizes.current.get(id);
     measuredSizes.current.set(id, size);
-    if (!previous || Math.abs(previous.width - size.width) < 2 && Math.abs(previous.height - size.height) < 2) return;
+    const expected = !previous && latestMap.current.nodes.find(node => node.id === id);
+    const before = previous || (expected ? layoutSize(expected) : size);
+    if (Math.abs(before.width - size.width) < 2 && Math.abs(before.height - size.height) < 2) return;
     if (geometryTimer.current) clearTimeout(geometryTimer.current);
     geometryTimer.current = setTimeout(() => {
       geometryTimer.current = null;
@@ -94,6 +96,8 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
   }), [baseNodes, livePositions]);
   const edges = useMemo(() => {
     const byId = new Map(displayVisible.map(node => { const live = livePositions.get(node.id); return [node.id, live ? { ...node, x: live.x, y: live.y } : node] as const; }));
+    const directCounts = new Map<string, number>();
+    for (const node of displayVisible) if (node.parentId) directCounts.set(node.parentId, (directCounts.get(node.parentId) || 0) + 1);
     const root = displayVisible.find(node => !node.parentId && !node.floating);
     const stages = map.layout === 'cycle' && root ? displayVisible.filter(node => node.parentId === root.id) : [];
     const tree = displayVisible.filter(n => n.parentId && byId.has(n.parentId)
@@ -102,7 +106,12 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     const parent = byId.get(n.parentId!)!; const target = byId.get(n.id)!;
     const edgeLayout = parent.branchLayout || map.layout;
     const horizontalTree = edgeLayout === 'horizontal' && target.x >= parent.x + visualSize(parent).width;
-    const { sourceHandle, targetHandle } = horizontalTree
+    const singleUnderlinedChild = target.shape === 'underline' && directCounts.get(parent.id) === 1;
+    const underlinedSide = singleUnderlinedChild && target.x >= parent.x + visualSize(parent).width ? 'right'
+      : singleUnderlinedChild && target.x + visualSize(target).width <= parent.x ? 'left' : null;
+    const { sourceHandle, targetHandle } = underlinedSide
+      ? { sourceHandle: `source-${underlinedSide}`, targetHandle: underlinedSide === 'right' ? 'target-left' : 'target-right' }
+      : horizontalTree
       ? { sourceHandle: 'source-right', targetHandle: 'target-left' }
       : (edgeLayout === 'vertical' || edgeLayout === 'flowchart') && target.y > parent.y
         ? { sourceHandle: 'source-bottom', targetHandle: 'target-top' }
@@ -114,7 +123,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     const edgeLine = { ...line, color, width: line?.width ?? (underline ? target.borderWidth ?? parent.borderWidth ?? 2 : 2), pattern: line?.pattern ?? (target.shape === 'underline' ? target.borderStyle : undefined) };
     const label = map.layout === 'flowchart' && parent.flowDecision ? n.flowAnswer === 'yes' ? 'Sim' : n.flowAnswer === 'no' ? 'Não' : undefined
       : map.layout === 'concept' ? n.conceptRelation || 'relaciona-se' : undefined;
-    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: edgeLine, route: horizontalTree ? 'horizontal-tree' as const : undefined }, animated: false, style: { stroke: color, strokeWidth: edgeLine.width, strokeDasharray: edgeDash(edgeLine) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? (target.shape === 'underline' ? 'none' : 'arrow'), color) };
+    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: edgeLine, route: underlinedSide ? 'inline-underline' as const : horizontalTree ? 'horizontal-tree' as const : undefined }, animated: false, style: { stroke: color, strokeWidth: edgeLine.width, strokeDasharray: edgeDash(edgeLine) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? (target.shape === 'underline' ? 'none' : 'arrow'), color) };
     });
     const cycle = stages.length < 2 ? [] : stages.map((stage, index) => {
       const target = stages[(index + 1) % stages.length];

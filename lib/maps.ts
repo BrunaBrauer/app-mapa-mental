@@ -344,6 +344,8 @@ export function packTreeLayout(nodes: MindNode[], layout: LayoutMode, dimensions
   const branch = new Map<string, MindNode[]>();
   const visiting = new Set<string>();
   const size = (node: MindNode) => dimensions?.get(node.id) || layoutSize(node);
+  // Underlined topics attach at their bottom rule; ordinary topics attach at mid-height.
+  const connectorY = (node: MindNode) => node.y + (node.shape === 'underline' ? size(node).height - 1 : size(node).height / 2);
   const box = (node: MindNode): Bounds => {
     const actual = size(node);
     return { left: node.x, top: node.y, right: node.x + actual.width, bottom: node.y + actual.height };
@@ -396,11 +398,21 @@ export function packTreeLayout(nodes: MindNode[], layout: LayoutMode, dimensions
         edge = side === 'right' || side === 'left' ? area.bottom : area.right;
       }
     }
+    const directChildren = children.get(node.id) || [];
+    if (directChildren.length === 1) {
+      const child = directChildren[0];
+      const side = branchDirection(node, [child], layout);
+      if ((side === 'right' || side === 'left') && (node.shape === 'underline' || child.shape === 'underline')) {
+        // A single horizontal branch can run directly into the child's underline.
+        // Translate its whole subtree so wrapping only grows the text above the line.
+        move(branch.get(child.id) || [child], 0, connectorY(node) - connectorY(child));
+      }
+    }
     const descendants = [...(children.get(node.id) || []).flatMap(child => branch.get(child.id) || [child])];
     if (descendants.length && !node.positionLocked) {
-      const direct = children.get(node.id)!;
+      const direct = directChildren;
       const horizontal = [...groups.keys()].every(side => side === 'right' || side === 'left');
-      if (horizontal) node.y = (direct[0].y + size(direct[0]).height / 2 + direct[direct.length - 1].y + size(direct[direct.length - 1]).height / 2) / 2 - size(node).height / 2;
+      if (horizontal) node.y += (connectorY(direct[0]) + connectorY(direct[direct.length - 1])) / 2 - connectorY(node);
       else node.x = (direct[0].x + size(direct[0]).width / 2 + direct[direct.length - 1].x + size(direct[direct.length - 1]).width / 2) / 2 - size(node).width / 2;
     }
     const items = [node, ...descendants];

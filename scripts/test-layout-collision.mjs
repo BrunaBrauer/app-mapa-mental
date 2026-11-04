@@ -35,6 +35,20 @@ assert.ok(layoutSize(longText).height > longText.height, 'User height acts as a 
 assert.ok(layoutSize({ ...longText, wrapText: false }).width > longText.width, 'Opting out of wrapping expands width instead of clipping the title');
 const measured = packTreeLayout([node('root', null), node('a', 'root', 145, 50, { x: 260 }), node('b', 'root', 145, 50, { x: 260, y: 100 })], 'horizontal', new Map([['a', { width: 145, height: 240 }]]));
 assert.ok(measured[2].y >= measured[1].y + 240 + 28, 'Measured content height pushes the sibling branch below it');
+const inlineSource = node('inline-root', null, 182, 62);
+const inlineChild = node('inline-child', inlineSource.id, 210, 50, { x: 310, y: 0, shape: 'underline', text: 'Texto longo sobre a linha que deve quebrar em várias linhas sem deslocar a conexão' });
+const inline = packTreeLayout([inlineSource, inlineChild], 'horizontal');
+const baseline = item => item.y + layoutSize(item).height - 1;
+assert.ok(Math.abs(inline[0].y + layoutSize(inline[0]).height / 2 - baseline(inline[1])) < 1, 'The underline meets the source at one horizontal baseline');
+const narrowed = packTreeLayout([inlineSource, { ...inlineChild, width: 110 }], 'horizontal');
+assert.ok(layoutSize(narrowed[1]).height > layoutSize(inline[1]).height, 'User width wraps the title and increases its height');
+assert.ok(Math.abs(narrowed[0].y + layoutSize(narrowed[0]).height / 2 - baseline(narrowed[1])) < 1, 'Wrapping leaves the connection horizontally aligned');
+const leftInline = layoutMap([inlineSource, { ...inlineChild, x: -310 }], 'left');
+assert.ok(leftInline[1].x + layoutSize(leftInline[1]).width < leftInline[0].x, 'The underlined child can sit to the left of its parent');
+assert.ok(Math.abs(leftInline[0].y + layoutSize(leftInline[0]).height / 2 - baseline(leftInline[1])) < 1, 'The left-facing underline also shares the source baseline');
+assert.deepEqual(packTreeLayout(narrowed, 'horizontal').map(item => item.y), narrowed.map(item => item.y), 'Repeated packing preserves the underline alignment');
+const measuredInline = packTreeLayout([inlineSource, inlineChild], 'horizontal', new Map([[inlineChild.id, { width: 210, height: 180 }]]));
+assert.ok(Math.abs(measuredInline[0].y + layoutSize(measuredInline[0]).height / 2 - measuredInline[1].y - 179) < 1, 'The measured text height realigns the underline');
 for (const child of horizontal.filter(item => item.parentId)) {
   const parent = horizontal.find(item => item.id === child.parentId);
   if (parent.branchLayout && parent.branchLayout !== 'horizontal') continue;

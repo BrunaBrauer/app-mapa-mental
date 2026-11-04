@@ -11,11 +11,13 @@ function Endpoint({ symbol, x, y, color, width, position }: { symbol?: LineStyle
   return null;
 }
 
-export default function StyledEdge(props: EdgeProps & { data?: { line?: LineStyle; route?: 'horizontal-tree' } }) {
+export default function StyledEdge(props: EdgeProps & { data?: { line?: LineStyle; route?: 'horizontal-tree' | 'inline-underline' } }) {
   const line = props.data?.line;
   const points = { sourceX: props.sourceX, sourceY: props.sourceY, targetX: props.targetX, targetY: props.targetY, sourcePosition: props.sourcePosition, targetPosition: props.targetPosition };
   const trunkX = props.sourceX + 24;
-  const [path, labelX, labelY] = props.data?.route === 'horizontal-tree'
+  const [path, labelX, labelY] = props.data?.route === 'inline-underline' && Math.abs(props.sourceY - props.targetY) <= 2
+    ? [`M ${props.sourceX} ${props.sourceY} H ${props.targetX}`, (props.sourceX + props.targetX) / 2, props.sourceY]
+    : props.data?.route === 'horizontal-tree'
     ? [`M ${props.sourceX} ${props.sourceY} H ${trunkX} V ${props.targetY} H ${props.targetX}`, (trunkX + props.targetX) / 2, props.targetY]
     : line?.curve === 'straight' ? getStraightPath(points) : line?.curve === 'smooth' ? getBezierPath(points) : getSmoothStepPath({ ...points, borderRadius: line?.curve === 'step' ? 0 : 12 });
   const color = line?.color || '#b9b4db';
