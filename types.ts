@@ -5,9 +5,10 @@ export type RichRun = { text: string; bold?: boolean; italic?: boolean; underlin
 export type LineStyle = { color?: string; width?: number; pattern?: 'solid' | 'dashed' | 'dotted' | 'double'; curve?: 'smooth' | 'straight' | 'step' | 'rounded'; start?: 'none' | 'arrow' | 'circle' | 'diamond' | 'square' | 'bar' | 'hollow-circle'; end?: 'none' | 'arrow' | 'circle' | 'diamond' | 'square' | 'bar' | 'hollow-circle' };
 export type NodeStyle = Pick<MindNode, 'background' | 'border' | 'color' | 'shape' | 'icon' | 'fontSize' | 'fontFamily' | 'lineSpacing' | 'letterSpacing' | 'bold' | 'italic' | 'underline' | 'strike' | 'textAlign' | 'textVerticalAlign' | 'wrapText' | 'textTransform' | 'width' | 'height' | 'minWidth' | 'maxWidth' | 'minHeight' | 'maxHeight' | 'padding' | 'paddingTop' | 'paddingRight' | 'paddingBottom' | 'paddingLeft' | 'cornerRadius' | 'borderWidth' | 'borderStyle'>;
 export type NodeComment = { id: string; text: string; createdAt: number };
+export type NodeNote = { id: string; text: string; createdAt: number };
 export type MindNode = {
   id: string; parentId: string | null; text: string; x: number; y: number;
-  side?: 'left' | 'right'; branchLayout?: LayoutMode; collapsed?: boolean; note?: string; url?: string;
+  side?: 'left' | 'right'; branchLayout?: LayoutMode; collapsed?: boolean; note?: string; notes?: NodeNote[]; url?: string;
   flowDecision?: boolean; flowAnswer?: 'yes' | 'no';
   conceptRelation?: string; timelineDate?: string; treemapValue?: number;
   matrixRows?: string[]; matrixColumns?: string[]; matrixRow?: number; matrixColumn?: number;

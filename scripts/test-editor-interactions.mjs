@@ -42,15 +42,32 @@ assert.doesNotMatch(richTextHtml('x', [{ text: '<script>', color: 'red" onmouseo
 
 const styleCode = ts.transpileModule(await readFile('lib/node-style.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { copyNodeFormatting } = await import(`data:text/javascript;base64,${Buffer.from(styleCode).toString('base64')}`);
-const sourceStyle = { id: 'styled', parentId: 'root', text: 'Styled', x: 0, y: 0, width: 230, height: 90, padding: 18, fontSize: 20, border: '#ff0000', connectionStyle: { color: '#ff0000', width: 4, pattern: 'dashed' } };
-const fullStyle = copyNodeFormatting(sourceStyle, true);
-const withoutDimensions = copyNodeFormatting(sourceStyle, false);
+const sourceStyle = { id: 'styled', parentId: 'root', text: 'Styled', x: 0, y: 0, width: 230, height: 90, padding: 18, fontSize: 20, color: '#123456', background: '#eeeeee', border: '#ff0000', connectionStyle: { color: '#ff0000', width: 4, pattern: 'dashed' } };
+const fullStyle = copyNodeFormatting(sourceStyle, 'all');
+const visualStyle = copyNodeFormatting(sourceStyle, 'visual');
+const sizeStyle = copyNodeFormatting(sourceStyle, 'size');
 assert.equal(fullStyle.width, 230);
 assert.equal(fullStyle.height, 90);
-assert.equal(withoutDimensions.width, undefined);
-assert.equal(withoutDimensions.height, undefined);
-assert.equal(withoutDimensions.padding, 18, 'Padding remains part of visual formatting');
-assert.equal(withoutDimensions.connectionStyle.pattern, 'dashed', 'Connection formatting is copied with the node');
-assert.equal(withoutDimensions.fontSize, 20);
+assert.equal(fullStyle.connectionStyle.pattern, 'dashed', 'All properties include the connection style');
+assert.deepEqual(visualStyle, { color: '#123456', background: '#eeeeee', border: '#ff0000' }, 'Visual mode copies exactly the three requested colors');
+assert.equal(sizeStyle.width, 230);
+assert.equal(sizeStyle.height, 90);
+assert.equal(sizeStyle.fontSize, 20);
+assert.equal(sizeStyle.color, undefined, 'Size mode leaves the destination colors untouched');
+assert.match(editor, /command && event\.altKey && key === 'v' && selectedIds\.length/, 'Ctrl+Alt+V applies copied style to the selection');
+
+const notesCode = ts.transpileModule(await readFile('lib/node-notes.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { notesForNode, appendNodeNote, updateNodeNote, removeNodeNote } = await import(`data:text/javascript;base64,${Buffer.from(notesCode).toString('base64')}`);
+const legacyNote = { id: 'old', note: 'Nota antiga' };
+assert.equal(notesForNode(legacyNote)[0].text, 'Nota antiga');
+const migratedNotes = appendNodeNote(legacyNote, 'Nova nota');
+assert.equal(migratedNotes.note, undefined);
+assert.deepEqual(migratedNotes.notes.map(note => note.text), ['Nota antiga', 'Nova nota']);
+assert.equal(notesForNode({ ...legacyNote, notes: [] }).length, 0, 'An explicitly emptied note list does not revive a legacy note');
+const editedNotes = updateNodeNote({ ...legacyNote, ...migratedNotes }, migratedNotes.notes[1].id, 'Atualizada');
+assert.deepEqual(editedNotes.notes.map(note => note.text), ['Nota antiga', 'Atualizada']);
+const remainingNotes = removeNodeNote({ ...legacyNote, ...editedNotes }, editedNotes.notes[0].id);
+assert.deepEqual(remainingNotes.notes.map(note => note.text), ['Atualizada'], 'Deleting one note preserves the others');
+assert.deepEqual(removeNodeNote({ ...legacyNote, ...remainingNotes }, remainingNotes.notes[0].id).notes, [], 'The final note can be deleted without restoring legacy content');
 
 console.log('Interações do editor: Backspace seguro, espaços editáveis, cursor visível, arraste e conexões alinhadas OK.');

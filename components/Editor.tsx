@@ -15,7 +15,8 @@ import { migrateMapLayouts } from '../lib/layout-migration';
 import { importFontFile, loadImportedFonts, type ImportedFont } from '../lib/fonts';
 import { downloadDriveFile, driveConfigured, pickDriveFile, preloadDrive, saveMapToDrive } from '../lib/google-drive';
 import { parseMapFile, parseMindomoArchive } from '../lib/import-map';
-import { copyNodeFormatting, pickNodeStyle } from '../lib/node-style';
+import { copyNodeFormatting, pickNodeStyle, type FormattingCopyMode } from '../lib/node-style';
+import { appendNodeNote } from '../lib/node-notes';
 import { alignNodes, childMovementSettings, collectNodeDimensions, effectiveAvoidOverlap, reorganizeBranch, type AlignCommand } from '../lib/movement';
 import { applySiblingAlignments, applyVisualStandard, markStyleOverrides, patchVisualNodes, spreadSiblingOverlaps, styleNewNodes, visualScopeIds, type VisualOperation, type VisualScope, type VisualStyleGroup } from '../lib/visual-standardization';
 import { defaultPreferences, normalizePreferences, type Preferences } from '../lib/preferences';
@@ -40,7 +41,7 @@ async function imageData(file: File): Promise<string> {
 }
 const localMode = process.env.NEXT_PUBLIC_STORAGE_MODE !== 'cloud';
 const LOCAL_KEY = 'mindora:maps:v1';
-const geometryFields: (keyof MindNode)[] = ['text', 'richText', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'fontSize', 'fontFamily', 'lineSpacing', 'letterSpacing', 'wrapText', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderWidth', 'shape', 'icon', 'task', 'note', 'comments', 'url', 'image', 'label', 'equation', 'mediaUrl'];
+const geometryFields: (keyof MindNode)[] = ['text', 'richText', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'fontSize', 'fontFamily', 'lineSpacing', 'letterSpacing', 'wrapText', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderWidth', 'shape', 'icon', 'task', 'note', 'notes', 'comments', 'url', 'image', 'label', 'equation', 'mediaUrl'];
 function changedNodeGeometry(before: MindMap, after: MindMap): boolean {
   if (before.nodes.length !== after.nodes.length) return false;
   const prior = new Map(before.nodes.map(node => [node.id, node]));
@@ -369,7 +370,10 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
     const node = active.nodes.find(item => item.id === aiProposal.nodeId);
     if (!node) { setAiProposal(null); return; }
     if (aiProposal.action === 'ai-summary') {
-      commit({ ...active, nodes: active.nodes.map(item => item.id === node.id ? { ...item, note: [item.note, aiProposal.summary].filter(Boolean).join('\n\n') } : item) });
+      let notePatch: Pick<MindNode, 'note' | 'notes'>;
+      try { notePatch = appendNodeNote(node, aiProposal.summary); }
+      catch (error) { window.alert(error instanceof Error ? error.message : 'Não foi possível adicionar a nota.'); return; }
+      commit({ ...active, nodes: active.nodes.map(item => item.id === node.id ? { ...item, ...notePatch } : item) });
       openQuickPanel(node.id, 'notes');
     } else {
       const reference = active.levelReferences?.find(entry => entry.parentId === node.id);
@@ -416,13 +420,13 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
     if (action === 'detach' && node.parentId) { commit({ ...active, layout: 'network', nodes: active.nodes.map(n => n.id === id ? { ...n, parentId: null, floating: true } : n) }); return; }
     if (action === 'copy' || action === 'cut') { const ids = descendants(active.nodes, id); branchClipboard.current = { rootId: id, nodes: active.nodes.filter(n => ids.has(n.id)).map(n => ({ ...n })) }; if (action === 'cut') removeNodeById(id); return; }
     if (action === 'paste' && branchClipboard.current) { const clipboard = branchClipboard.current; const origin = clipboard.nodes.find(n => n.id === clipboard.rootId)!; const ids = new Map(clipboard.nodes.map(n => [n.id, uid()])); const copies = clipboard.nodes.map(n => ({ ...n, id: ids.get(n.id)!, parentId: n.id === clipboard.rootId ? id : ids.get(n.parentId!)!, x: node.x + (n.x - origin.x) + 260, y: node.y + (n.y - origin.y), comments: n.comments?.map(c => ({ ...c, id: uid() })) })); const nodes = [...active.nodes, ...copies]; commit({ ...active, nodes: layoutMap(nodes, active.layout, active.spacing) }); selectOne(ids.get(clipboard.rootId)!); return; }
-    if (action === 'copy-style') { styleClipboard.current = pickNodeStyle(node); setStyleCopied(true); return; }
+    if (action === 'copy-style' || action === 'copy-style-all' || action === 'copy-style-visual' || action === 'copy-style-size') { styleClipboard.current = copyNodeFormatting(node, action === 'copy-style-visual' ? 'visual' : action === 'copy-style-size' ? 'size' : 'all'); setStyleCopied(true); return; }
     if (action === 'paste-style') { if (styleClipboard.current) patchNodeById(id, styleClipboard.current); return; }
     if (action === 'set-default-style') { commit({ ...active, defaultNodeStyle: pickNodeStyle(node) }); return; }
     if (action === 'copy-link') { const url = new URL(window.location.href); url.searchParams.set('map', active.id); url.searchParams.set('node', id); navigator.clipboard.writeText(url.href).catch(() => {}); return; }
     if (action === 'copy-text') { navigator.clipboard.writeText(node.text).catch(() => {}); return; }
     if (action === 'ideas' || action === 'questions' || action === 'ai-summary' || action === 'swot') { void requestAi(node, action); return; }
-    if (action === 'explain') { patchNodeById(id, { note: [node.note, `## ${node.text}\n\nDescrição, contexto e próximos passos:`].filter(Boolean).join('\n\n') }); openQuickPanel(id, 'notes'); return; }
+    if (action === 'explain') { try { patchNodeById(id, appendNodeNote(node, `## ${node.text}\n\nDescrição, contexto e próximos passos:`)); openQuickPanel(id, 'notes'); } catch (error) { window.alert(error instanceof Error ? error.message : 'Não foi possível adicionar a nota.'); } return; }
     const suggestions: Record<string, string[]> = {
       ideas: ['Objetivos', 'Possibilidades', 'Próximos passos'],
       questions: [`O que é ${node.text}?`, 'Por que isso importa?', 'Como implementar?'],
@@ -451,11 +455,11 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
     const styled = patchVisualNodes(active, [...ids], rest, collectNodeDimensions());
     commit(connectionStyle ? { ...styled, nodes: styled.nodes.map(node => ids.has(node.id) && node.parentId ? { ...node, connectionStyle: { ...node.connectionStyle, ...connectionStyle } } : node) } : styled);
   };
-  const copyFormatting = (includeDimensions: boolean) => {
+  const copyFormatting = (mode: FormattingCopyMode) => {
     if (!selected || selectedIds.length !== 1) return;
-    styleClipboard.current = copyNodeFormatting(selected, includeDimensions);
+    styleClipboard.current = copyNodeFormatting(selected, mode);
     setStyleCopied(true);
-    setMovementNotice(includeDimensions ? 'Formatação completa copiada. Selecione os nós de destino e clique em Aplicar estilo.' : 'Formatação copiada sem dimensões. Selecione os nós de destino e clique em Aplicar estilo.');
+    setMovementNotice('Formatação copiada. Selecione os nós de destino e clique em Aplicar estilo ou pressione Ctrl+Alt+V.');
   };
   const pasteFormatting = () => {
     if (!active || !selectedIds.length || !styleClipboard.current) return;
@@ -465,6 +469,8 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
     commit({ ...next, nodes: next.nodes.map(node => targets.has(node.id) && node.parentId && Object.hasOwn(styleClipboard.current!, 'connectionStyle') ? { ...node, connectionStyle: connectionStyle ? { ...connectionStyle } : undefined } : node) });
     setMovementNotice(`Formatação aplicada a ${selectedIds.length} nó${selectedIds.length === 1 ? '' : 's'}.`);
   };
+  const pasteFormattingRef = useRef(pasteFormatting);
+  useEffect(() => { pasteFormattingRef.current = pasteFormatting; });
   const removeMany = useCallback(() => {
     if (!active || selectedIds.length < 2) return;
     const ids = new Set<string>();
@@ -512,7 +518,8 @@ export default function Editor({ userName, signOutPath, initialPreferences = def
       else if (event.key === 'Escape') { selectMany([]); setRelationSourceId(null); setSelectedEdgeId(null); }
       else if (selectedId && command && key === 'c') { event.preventDefault(); quickActionRef.current(selectedId, event.shiftKey ? 'copy-style' : 'copy'); }
       else if (selectedId && command && key === 'x') { event.preventDefault(); quickActionRef.current(selectedId, 'cut'); }
-      else if (selectedId && command && key === 'v') { event.preventDefault(); quickActionRef.current(selectedId, event.altKey ? 'paste-style' : 'paste'); }
+      else if (command && event.altKey && key === 'v' && selectedIds.length) { event.preventDefault(); pasteFormattingRef.current(); }
+      else if (selectedId && command && key === 'v') { event.preventDefault(); quickActionRef.current(selectedId, 'paste'); }
       else if (selectedId && command && key === 'd') { event.preventDefault(); quickActionRef.current(selectedId, 'duplicate'); }
       else if (selectedId && command && key === 'l') { event.preventDefault(); quickActionRef.current(selectedId, 'relationship'); }
       else if (selectedId && event.altKey && event.shiftKey && key === 'm') { event.preventDefault(); quickActionRef.current(selectedId, 'move-branch'); }

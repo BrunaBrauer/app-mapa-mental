@@ -9,9 +9,9 @@ export function pickNodeStyle(node: MindNode, mode: 'size' | 'format' | 'both' =
   return style;
 }
 
-export function copyNodeFormatting(node: MindNode, includeDimensions: boolean): Partial<MindNode> {
-  const style: Partial<MindNode> = { ...pickNodeStyle(node), connectionStyle: node.connectionStyle ? { ...node.connectionStyle } : undefined };
-  if (includeDimensions) style.sizeMode = node.sizeMode;
-  else for (const key of ['width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight'] as const) delete style[key];
-  return style;
+export type FormattingCopyMode = 'all' | 'visual' | 'size';
+export function copyNodeFormatting(node: MindNode, mode: FormattingCopyMode): Partial<MindNode> {
+  if (mode === 'visual') return { color: node.color, background: node.background, border: node.border };
+  if (mode === 'size') return { width: node.width, height: node.height, minWidth: node.minWidth, maxWidth: node.maxWidth, minHeight: node.minHeight, maxHeight: node.maxHeight, fontSize: node.fontSize, sizeMode: node.sizeMode };
+  return { ...pickNodeStyle(node), sizeMode: node.sizeMode, connectionStyle: node.connectionStyle ? { ...node.connectionStyle } : undefined };
 }

@@ -82,5 +82,16 @@
 .style-copy-menu button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;padding:9px;border:0;border-radius:7px;background:transparent;color:var(--text);font-size:11px;font-weight:700;text-align:left;cursor:pointer}
 .style-copy-menu button:hover{background:var(--accent-soft);color:var(--accent)}
 .style-copy-menu small{font-weight:400;color:var(--muted)}
+.quick-note-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.quick-note-heading strong{margin:0}
+.quick-note-heading button{display:inline-flex;align-items:center;gap:4px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--accent);font-size:11px;font-weight:700;cursor:pointer}
+.quick-note-heading button:disabled{opacity:.5;cursor:not-allowed}
+.quick-note-list{display:flex;flex-direction:column;gap:4px;max-height:150px;overflow:auto;margin-bottom:10px}
+.quick-note-list>div{display:flex;align-items:center;border:1px solid var(--line);border-radius:7px;background:var(--surface2)}
+.quick-note-list>div.active{border-color:var(--accent);background:var(--accent-soft)}
+.quick-note-select{display:flex;flex:1;min-width:0;flex-direction:column;align-items:flex-start;gap:3px;padding:7px 9px;border:0;background:transparent;color:var(--text);font-size:11px;font-weight:700;text-align:left;cursor:pointer}
+.quick-note-select small{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400}
+.quick-note-delete{display:grid;place-items:center;width:30px;height:30px;margin-right:4px;border:0;border-radius:5px;background:transparent;color:var(--muted);cursor:pointer}
+.quick-note-delete:hover{background:#ffeced;color:#c53748}
 @media(max-width:1100px){.style-shortcuts .organize{font-size:0;gap:0;padding:7px}.style-shortcuts .organize svg{flex:none}.style-copy-wrap .organize svg:last-child{display:none}}
 @media(max-width:760px){.canvas-bottom{flex-wrap:wrap;justify-content:flex-end}.style-copy-menu{right:-40px;min-width:min(260px,calc(100vw - 30px))}}

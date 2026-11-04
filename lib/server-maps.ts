@@ -108,6 +108,10 @@ function validNode(node: unknown): node is MindNode {
   if (!optionalOneOf(node.textAlign, ['left', 'center', 'right', 'justify']) || !optionalOneOf(node.textVerticalAlign, ['top', 'center', 'bottom']) || !optionalOneOf(node.textTransform, ['none', 'uppercase', 'lowercase'])) return false;
   if (!['collapsed', 'floating', 'boundary', 'bold', 'italic', 'underline', 'strike', 'positionLocked', 'inheritMovement', 'inheritMovementToChildren', 'avoidOverlap', 'sizeLocked', 'lockAspectRatio', 'wrapText', 'flowDecision'].every(key => optionalBoolean(node[key]))) return false;
   if (!['note', 'summary'].every(key => optionalText(node[key], 100_000)) || !optionalText(node.label, 1000) || !optionalText(node.equation, 10_000) || !optionalText(node.icon, 24) || !optionalText(node.fontFamily, 200)) return false;
+  if (node.notes !== undefined && (!Array.isArray(node.notes) || node.notes.length > 100
+    || node.notes.reduce((length, note) => length + (record(note) && typeof note.text === 'string' ? note.text.length : 0), 0) > 200_000
+    || new Set(node.notes.map(note => record(note) ? note.id : undefined)).size !== node.notes.length
+    || !node.notes.every(note => record(note) && text(note.id, 100, false) && text(note.text, 100_000) && finite(note.createdAt, 0, Number.MAX_SAFE_INTEGER)))) return false;
   if (!validWebUrl(node.url) || !validWebUrl(node.mediaUrl) || !validImage(node.image) || !validStyle(node)) return false;
   if (node.connectionStyle !== undefined && !validLineStyle(node.connectionStyle)) return false;
   if (!validRichText(node.richText)) return false;
