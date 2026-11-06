@@ -330,7 +330,7 @@ export function swimlaneGeometry(nodes: MindNode[]) {
     rowGap: Math.max(130, ...visible.map(node => layoutSize(node).height + 40)),
   };
 }
-export function packTreeLayout(nodes: MindNode[], layout: LayoutMode, dimensions?: Map<string, { width: number; height: number }>, spacing = { x: 260, y: 112 }): MindNode[] {
+export function packTreeLayout(nodes: MindNode[], layout: LayoutMode, dimensions?: Map<string, { width: number; height: number }>, spacing = { x: 260, y: 112 }, compactWithin?: Set<string>): MindNode[] {
   if (!treeLayouts.includes(layout) || nodes.length < 2) return nodes;
   const result = nodes.map(node => ({ ...node }));
   const visible = visibleNodes(result);
@@ -423,7 +423,8 @@ export function packTreeLayout(nodes: MindNode[], layout: LayoutMode, dimensions
       const side = branchDirection(node, [child], layout);
       groups.set(side, [...(groups.get(side) || []), child]);
     }
-    // Keep entire sibling subtrees apart, then leave a clear channel from parent to child.
+    // Pack whole sibling subtrees, including descendants, with a small readable gutter.
+    // A signed shift also removes inherited empty space from earlier layouts.
     for (const [side, siblings] of groups) {
       let edge = -Infinity;
       for (const child of siblings) {
@@ -436,7 +437,9 @@ export function packTreeLayout(nodes: MindNode[], layout: LayoutMode, dimensions
         move(items, dx, dy);
         area = bounds(items);
         const transverse = side === 'right' || side === 'left' ? area.top : area.left;
-        const shift = Math.max(0, edge + 28 - transverse);
+        const shift = edge === -Infinity ? 0 : compactWithin && !compactWithin.has(child.id)
+          ? Math.max(0, edge + 28 - transverse)
+          : edge + 16 - transverse;
         move(items, side === 'right' || side === 'left' ? 0 : shift, side === 'right' || side === 'left' ? shift : 0);
         area = bounds(items);
         edge = side === 'right' || side === 'left' ? area.bottom : area.right;

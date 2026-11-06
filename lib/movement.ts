@@ -1,5 +1,5 @@
 import type { LayoutMode, MindMap, MindNode, MovementMode } from '../types';
-import { layoutBranch, layoutMap, layoutSize, packTreeLayout, visibleNodes } from './maps';
+import { descendants, layoutBranch, layoutMap, layoutSize, packTreeLayout, visibleNodes } from './maps';
 
 export type Point = { x: number; y: number };
 export type NodeDimensions = Map<string, { width: number; height: number }>;
@@ -215,7 +215,7 @@ export function reorganizeBranch(map: MindMap, id: string, _avoidOverlap = true,
   const mode: LayoutMode = anchor.branchLayout || (map.layout === 'free' || map.layout === 'network' ? 'horizontal' : map.layout);
   const originals = new Map(map.nodes.map(node => [node.id, node]));
   const planned = anchor.parentId
-    ? packTreeLayout(layoutBranch(map.nodes, id, mode, map.spacing), map.layout === 'free' || map.layout === 'network' ? mode : map.layout, undefined, map.spacing)
+    ? packTreeLayout(layoutBranch(map.nodes, id, mode, map.spacing), map.layout === 'free' || map.layout === 'network' ? mode : map.layout, undefined, map.spacing, descendants(map.nodes, id))
     : layoutMap(map.nodes, mode, map.spacing);
   const next = planned.map(node => { const original = originals.get(node.id)!; return node.positionLocked ? { ...node, x: original.x, y: original.y, collapsed: original.collapsed } : { ...node, collapsed: original.collapsed }; });
   return { ...map, nodes: next };

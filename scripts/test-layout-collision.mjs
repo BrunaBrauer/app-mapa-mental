@@ -34,7 +34,10 @@ const longText = node('long', 'root', 100, 36, { text: 'Uma frase extensa com v�
 assert.ok(layoutSize(longText).height > longText.height, 'User height acts as a minimum; wrapped text and attachment icons remain visible');
 assert.ok(layoutSize({ ...longText, wrapText: false }).width > longText.width, 'Opting out of wrapping expands width instead of clipping the title');
 const measured = packTreeLayout([node('root', null), node('a', 'root', 145, 50, { x: 260 }), node('b', 'root', 145, 50, { x: 260, y: 100 })], 'horizontal', new Map([['a', { width: 145, height: 240 }]]));
-assert.ok(measured[2].y >= measured[1].y + 240 + 28, 'Measured content height pushes the sibling branch below it');
+assert.ok(measured[2].y >= measured[1].y + 240 + 16, 'Measured content height keeps a compact, safe gap between siblings');
+const siblings = layoutMap([node('compact-root', null), node('first', 'compact-root', 145, 50), node('second', 'compact-root', 145, 80), node('third', 'compact-root', 145, 50)], 'horizontal');
+assert.equal(Math.round(siblings[2].y - siblings[1].y - layoutSize(siblings[1]).height), 16, 'Siblings have the minimum gutter after automatic layout');
+assert.equal(Math.round(siblings[3].y - siblings[2].y - layoutSize(siblings[2]).height), 16, 'Each subsequent sibling is packed independently');
 const inlineSource = node('inline-root', null, 182, 62);
 const inlineChild = node('inline-child', inlineSource.id, 210, 50, { x: 310, y: 0, shape: 'underline', text: 'Texto longo sobre a linha que deve quebrar em várias linhas sem deslocar a conexão' });
 const inline = packTreeLayout([inlineSource, inlineChild], 'horizontal');
