@@ -7,6 +7,7 @@ import StyledEdge from './StyledEdge';
 import type { NodeAction, NodePanel } from './NodeQuickToolbar';
 import type { LineStyle, MindMap, MindNode, TagDefinition } from '../types';
 import { branchCounts, branchDirection, descendants, layoutMap, layoutSize, matrixGeometry, packTreeLayout, swimlaneGeometry, treemapRects, visibleNodes } from '../lib/maps';
+import { createBoundaryGeometry } from '../lib/boundary-geometry';
 import { collectNodeDimensions, effectiveAvoidOverlap, movementModes, projectDrag, reparentBranch, reorderAlignedSibling, reorganizeBranch, snapMoveAwayFromOverlap, visualSize } from '../lib/movement';
 import { alignedHandles } from '../lib/edge-geometry';
 import { applySiblingAlignments } from '../lib/visual-standardization';
@@ -36,6 +37,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     if (candidate?.dataset.id) { candidate.classList.add('reparent-drop-target'); dropTarget.current = { id: candidate.dataset.id, element: candidate }; }
   }, [map.nodes, clearDropTarget]);
   const measuredSizes = useRef(new Map<string, { width: number; height: number }>());
+  const [renderedSizes, setRenderedSizes] = useState(() => new Map<string, { width: number; height: number }>());
   const measuredMapId = useRef(map.id);
   const geometryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestMap = useRef(map);
@@ -47,6 +49,9 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     if (measuredMapId.current !== map.id) { measuredSizes.current.clear(); measuredMapId.current = map.id; }
     const previous = measuredSizes.current.get(id);
     measuredSizes.current.set(id, size);
+    if (!previous || Math.abs(previous.width - size.width) >= 1 || Math.abs(previous.height - size.height) >= 1) {
+      setRenderedSizes(current => new Map(current).set(id, size));
+    }
     const expected = !previous && latestMap.current.nodes.find(node => node.id === id);
     const before = previous || (expected ? layoutSize(expected) : size);
     if (Math.abs(before.width - size.width) < 2 && Math.abs(before.height - size.height) < 2) return;
@@ -182,15 +187,19 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     if (map.layout === 'treemap') return [];
     const legacy = visible.filter(node => node.boundary || node.summary).map(node => ({ id: node.id, anchorIds: [node.id], boundary: Boolean(node.boundary), summary: node.summary, tagIds: node.boundaryTagIds || [] }));
     const groups = (map.boundaryGroups || []).map(group => ({ id: group.id, anchorIds: group.nodeIds, boundary: true, summary: undefined, tagIds: group.tagIds || [] }));
+    const boxes = visible.map(node => { const live = livePositions.get(node.id); const size = renderedSizes.get(node.id) || layoutSize(node); return { id: node.id, parentId: node.parentId, x: live?.x ?? node.x, y: live?.y ?? node.y, width: size.width, height: size.height }; });
     return [...legacy, ...groups].flatMap(group => {
       const ids = new Set(group.anchorIds.flatMap(id => [...descendants(map.nodes, id)]));
-      const branch = visible.filter(item => ids.has(item.id)).map(item => { const live = livePositions.get(item.id); return live ? { ...item, x: live.x, y: live.y } : item; });
+      const branch = boxes.filter(item => ids.has(item.id));
       if (!branch.length) return [];
-      const x = Math.min(...branch.map(item => item.x)) - 28, y = Math.min(...branch.map(item => item.y)) - 28;
-      const right = Math.max(...branch.map(item => item.x + layoutSize(item).width)) + 28, bottom = Math.max(...branch.map(item => item.y + layoutSize(item).height)) + 28;
-      return [{ ...group, x, y, width: right - x, height: bottom - y }];
+      const geometry = group.boundary ? createBoundaryGeometry(boxes, ids) : null;
+      const x = geometry?.x ?? Math.min(...branch.map(item => item.x)) - 12;
+      const y = geometry?.y ?? Math.min(...branch.map(item => item.y)) - 12;
+      const right = geometry ? geometry.x + geometry.width : Math.max(...branch.map(item => item.x + item.width)) + 12;
+      const bottom = geometry ? geometry.y + geometry.height : Math.max(...branch.map(item => item.y + item.height)) + 12;
+      return [{ ...group, x, y, width: right - x, height: bottom - y, outline: geometry?.path }];
     });
-  }, [visible, map.nodes, map.boundaryGroups, map.layout, livePositions]);
+  }, [visible, map.nodes, map.boundaryGroups, map.layout, livePositions, renderedSizes]);
   const diagramBackdrop = useMemo(() => {
     const root = visible.find(node => !node.parentId && !node.floating);
     if (!root) return null;
@@ -361,7 +370,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     <ReactFlow proOptions={{ hideAttribution: true }} autoPanOnNodeFocus={false} autoPanOnNodeDrag={false} panActivationKeyCode={null} nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onNodeDragStart={() => { if (dropCleanup.current) clearTimeout(dropCleanup.current); clearDropTarget(); }} onNodeDrag={(event, node) => { const pointer = 'changedTouches' in event ? event.changedTouches[0] : event; if (dragPositions.current.size <= 1 && pointer) inspectDropTarget(pointer.clientX, pointer.clientY, node.id); else clearDropTarget(); }} onNodeDragStop={(event, node) => { const pointer = 'changedTouches' in event ? event.changedTouches[0] : event; if (dragPositions.current.size && pointer) inspectDropTarget(pointer.clientX, pointer.clientY, node.id); dropCleanup.current = setTimeout(clearDropTarget, 150); }} onConnect={onConnect} onConnectEnd={onConnectEnd} onNodeClick={(event, node) => { setContextNodeId(null); if (!event.ctrlKey && !event.metaKey && !event.shiftKey) onSelect(node.id); }} onEdgeClick={(_event, edge) => { if (readOnly) return; if (map.relationships?.some(link => link.id === edge.id)) onSelectEdge?.(edge.id); else onSelect(edge.target); }} onNodeContextMenu={(event, node) => { if (readOnly) return; event.preventDefault(); setContextNodeId(node.id); onOpenQuick?.(node.id, 'movement'); }} onPaneClick={(event) => { if (event.ctrlKey || event.metaKey) return; setContextNodeId(null); onSelect(null); }} fitView fitViewOptions={{ padding: 0.3, maxZoom: 1 }} minZoom={0.18} maxZoom={2.5} panOnDrag={spaceHeld ? [0, 1, 2] : [1, 2]} zoomOnScroll zoomOnDoubleClick={false} selectionOnDrag={false} selectionKeyCode={readOnly ? null : ["Control", "Meta", "Shift"]} multiSelectionKeyCode={["Control", "Meta"]} selectionMode={SelectionMode.Partial} deleteKeyCode={null} nodeDragThreshold={3} nodesConnectable={!readOnly} connectionMode={ConnectionMode.Loose} nodesDraggable={!readOnly} elementsSelectable={!readOnly} connectionLineType={ConnectionLineType.SmoothStep}>
       {grid && <Background variant={BackgroundVariant.Dots} gap={22} size={1.1} color="#dadde9" />}
       <ViewportPortal>{diagramBackdrop}{concentricRings.map(ring => <div key={`ring-${ring.depth}`} className="concentric-ring" style={{ left: ring.x, top: ring.y, width: ring.diameter, height: ring.diameter }}/>)}</ViewportPortal>
-      <ViewportPortal>{annotations.map(({ id, boundary, summary, tagIds, x, y, width, height }) => <div key={id} className="branch-annotation" style={{ left: x, top: y, width, height }}>{boundary && <div className="branch-boundary"/>}{Boolean(tagIds.length) && <div className="branch-tag-icons">{tagIds.map(tagId => { const tag = map.tagDefinitions?.find(item => item.id === tagId); return <span key={tagId} title={tag?.name || 'Etiqueta'} style={{ color: tag?.color || '#7057e8' }}>◆</span>; })}</div>}{summary && <div className="branch-summary">{summary}</div>}</div>)}</ViewportPortal>
+      <ViewportPortal>{annotations.map(({ id, boundary, summary, tagIds, x, y, width, height, outline }) => <div key={id} className="branch-annotation" style={{ left: x, top: y, width, height }}>{boundary && outline && <svg className="branch-boundary-shape" width={width} height={height} aria-hidden="true"><path d={outline}/></svg>}{Boolean(tagIds.length) && <div className="branch-tag-icons">{tagIds.map(tagId => { const tag = map.tagDefinitions?.find(item => item.id === tagId); return <span key={tagId} title={tag?.name || 'Etiqueta'} style={{ color: tag?.color || '#7057e8' }}>◆</span>; })}</div>}{summary && <div className="branch-summary">{summary}</div>}</div>)}</ViewportPortal>
       <Controls position="bottom-left" showInteractive={false}/>
     </ReactFlow>
 
