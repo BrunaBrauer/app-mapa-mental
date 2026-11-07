@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
+
+const code = ts.transpileModule(await readFile('lib/boundaries.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { boundaryExists, boundaryTagIds, removeBoundary, setBoundaryTag } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const map = { id: 'map', nodes: [{ id: 'root', parentId: null, boundary: true, boundaryTagIds: ['old'] }, { id: 'child', parentId: 'root' }], boundaryGroups: [{ id: 'group', nodeIds: ['root', 'child'] }] };
+const legacy = { kind: 'node', id: 'root' }, group = { kind: 'group', id: 'group' };
+assert.equal(boundaryExists(map, legacy), true);
+assert.equal(boundaryExists(map, group), true);
+assert.deepEqual(boundaryTagIds(map, legacy), ['old']);
+const labeled = setBoundaryTag(map, group, 'tag', true);
+assert.deepEqual(boundaryTagIds(labeled, group), ['tag']);
+assert.deepEqual(boundaryTagIds(setBoundaryTag(labeled, group, 'tag', false), group), []);
+const withoutGroup = removeBoundary(labeled, group);
+assert.equal(boundaryExists(withoutGroup, group), false);
+assert.equal(withoutGroup.nodes.length, 2, 'Deleting a boundary preserves its nodes');
+assert.equal(boundaryExists(withoutGroup, legacy), true, 'Other boundaries remain');
+const withoutLegacy = removeBoundary(withoutGroup, legacy);
+assert.equal(boundaryExists(withoutLegacy, legacy), false);
+assert.equal(withoutLegacy.nodes.length, 2);
+console.log('Limites: seleção, etiquetas e exclusão sem apagar nós OK.');
