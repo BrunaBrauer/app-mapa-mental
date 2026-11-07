@@ -71,6 +71,9 @@ const levelStyle = applyVisualStandard(map, ['a'], 'selection', 'save-level-styl
 assert.equal(levelStyle.levelStyles[0].depth, 1);
 assert.equal(get(levelStyle, 'b').width, 120);
 const newChild = { id: 'c', parentId: 'root', text: 'C', x: 280, y: 220 };
+const personalizedWidths = { ...map, nodes: map.nodes.map(node => node.id === 'b' ? { ...node, sizeMode: 'custom' } : node) };
+assert.equal(get(styleNewNodes(personalizedWidths, { ...personalizedWidths, nodes: [...personalizedWidths.nodes, newChild] }), 'c').width, 120, 'Novo irmão usa a largura padrão do nível, não a largura personalizada.');
+assert.equal(get(styleNewNodes(map, { ...map, nodes: [...map.nodes, { ...newChild, width: 225 }] }), 'c').width, 225, 'Uma largura explícita do novo nó é preservada.');
 assert.equal(get(styleNewNodes(levelStyle, { ...levelStyle, nodes: [...levelStyle.nodes, newChild] }), 'c').width, 120);
 const dimensionLevel = applyVisualStandard(limited, ['a'], 'selection', 'save-level-style', dims);
 const inheritedLimits = get(styleNewNodes(dimensionLevel, { ...dimensionLevel, nodes: [...dimensionLevel.nodes, newChild] }), 'c');

@@ -280,15 +280,19 @@ export function applyVisualStandard(map: MindMap, selectedIds: string[], scope: 
   }) };
 }
 
-/** Apply level templates only to genuinely new nodes; manual edits keep priority. */
+/** New nodes share a level width; explicit sizes and individual overrides keep priority. */
 export function styleNewNodes(previous: MindMap, next: MindMap): MindMap {
-  if (!next.levelStyles?.length) return next;
   const oldIds = new Set(previous.nodes.map(node => node.id));
   return { ...next, nodes: next.nodes.map(node => {
     if (oldIds.has(node.id)) return node;
     const depth = nodeDepth(next.nodes, node.id);
     const level = levelStyleForDepth(next, depth);
     const style: Partial<NodeStyle> | undefined = level?.style;
-    return style ? { ...node, ...stylePatch(node, style, level?.autoWidth, level?.autoHeight), styleOverrides: node.styleOverrides || [] } : node;
+    const styled = style ? { ...node, ...stylePatch(node, style, level?.autoWidth, level?.autoHeight), styleOverrides: node.styleOverrides || [] } : node;
+    if (depth === null || depth === 0 || styled.width !== undefined || level?.autoWidth || styled.styleOverrides?.includes('width')) return styled;
+    const candidates = previous.nodes.filter(item => nodeDepth(previous.nodes, item.id) === depth && item.sizeMode !== 'custom' && !item.styleOverrides?.includes('width'));
+    const sibling = candidates.find(item => item.parentId === node.parentId);
+    const standard = sibling || candidates[0];
+    return { ...styled, width: standard?.width ?? next.defaultNodeStyle?.width ?? 145 };
   }) };
 }
