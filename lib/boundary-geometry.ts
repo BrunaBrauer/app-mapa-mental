@@ -1,7 +1,7 @@
 /** Geometry for a branch boundary. Coordinates are in canvas units, before zoom. */
 export type BoundaryBox = { id: string; parentId: string | null; x: number; y: number; width: number; height: number };
 export type BoundaryRect = { x: number; y: number; width: number; height: number };
-export type BoundaryGeometry = { x: number; y: number; width: number; height: number; path: string; parts: BoundaryRect[] };
+export type BoundaryGeometry = { x: number; y: number; width: number; height: number; path: string; parts: BoundaryRect[]; rectangular: boolean };
 
 const right = (box: BoundaryRect) => box.x + box.width;
 const bottom = (box: BoundaryRect) => box.y + box.height;
@@ -47,6 +47,17 @@ export function createBoundaryGeometry(boxes: BoundaryBox[], scopeIds: Set<strin
   const inside = boxes.filter(box => scopeIds.has(box.id) && box.width > 0 && box.height > 0);
   if (!inside.length) return null;
   const outside = boxes.filter(box => !scopeIds.has(box.id));
+  const frame = {
+    x: Math.min(...inside.map(box => box.x)) - 12,
+    y: Math.min(...inside.map(box => box.y)) - 12,
+    width: Math.max(...inside.map(right)) - Math.min(...inside.map(box => box.x)) + 24,
+    height: Math.max(...inside.map(bottom)) - Math.min(...inside.map(box => box.y)) + 24,
+  };
+  // A single rounded frame matches the standard Mindomo-like boundary when
+  // its interior contains only nodes that belong to this scope.
+  if (outside.every(other => !overlaps(frame, other))) {
+    return { ...frame, path: '', parts: [frame], rectangular: true };
+  }
   const byId = new Map(inside.map(box => [box.id, box]));
   const parts: BoundaryRect[] = inside.map(box => {
     const pad = safePadding(box, outside);
@@ -84,5 +95,5 @@ export function createBoundaryGeometry(boxes: BoundaryBox[], scopeIds: Set<strin
     if (!occupied(column, row + 1)) edge.push(`M${rightEdge} ${bottomEdge}H${left}`);
     if (!occupied(column - 1, row)) edge.push(`M${left} ${bottomEdge}V${top}`);
   }
-  return { x, y, width, height, path: edge.join(''), parts };
+  return { x, y, width, height, path: edge.join(''), parts, rectangular: false };
 }
