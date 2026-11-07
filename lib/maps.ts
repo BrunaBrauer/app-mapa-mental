@@ -296,7 +296,7 @@ export function layoutSize(node: MindNode): { width: number; height: number } {
   const fontSize = Math.max(node.fontSize ?? (!node.parentId ? 18 : 14), ...(node.richText || []).map(run => run.fontSize ?? 0));
   const lineSpacing = Math.max(node.lineSpacing ?? 1.3, ...(node.richText || []).map(run => run.lineSpacing ?? 0));
   const sidePadding = (node.paddingLeft ?? node.padding ?? 14) + (node.paddingRight ?? node.padding ?? 14);
-  const attachmentWidth = (node.icon ? 24 : 0) + (node.notes ? node.notes.length ? 28 : 0 : node.note ? 20 : 0) + (node.comments?.length ? 28 : 0) + (node.url ? 20 : 0) + (node.task ? 22 : 0);
+  const attachmentWidth = (node.icon ? 24 : 0) + (node.notes ? node.notes.length ? 28 : 0 : node.note ? 20 : 0) + (node.comments?.length ? 28 : 0) + (node.tagIds?.length || 0) * 20 + (node.url ? 20 : 0) + (node.task ? 22 : 0);
   const naturalWidth = Math.max(...node.text.split(/\r?\n/).map(line => line.length * fontSize * .6)) + sidePadding + attachmentWidth + 4;
   const width = node.wrapText === false ? Math.max(declaredWidth, naturalWidth) : declaredWidth;
   const textWidth = Math.max(28, width - sidePadding - attachmentWidth - 4);

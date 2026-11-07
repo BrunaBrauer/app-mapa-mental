@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
+
+const compiled = ts.transpileModule(await readFile('lib/workspace.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { emptyWorkspace, folderTreeIds, mapHasTag, normalizeWorkspace, projectCounts, validWorkspace } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const project = { id: id(1), name: 'Pesquisa', createdAt: 1 };
+const parent = { id: id(2), projectId: project.id, parentId: null, name: 'Fontes', createdAt: 2 };
+const child = { id: id(3), projectId: project.id, parentId: parent.id, name: 'Artigos', createdAt: 3 };
+const tag = { id: id(4), name: 'Método', color: '#7057e8' };
+const file = { id: id(5), projectId: project.id, folderId: child.id, name: 'artigo.pdf', mime: 'application/pdf', size: 30, storagePath: `${id(6)}/${id(5)}`, createdAt: 4 };
+const workspace = { ...emptyWorkspace(), projects: [project], folders: [parent, child], tags: [tag], files: [file] };
+assert.equal(validWorkspace(workspace), true);
+assert.deepEqual([...folderTreeIds(workspace.folders, parent.id)].sort(), [parent.id, child.id].sort());
+const map = { id: id(7), projectId: project.id, nodes: [{ id: id(8), tagIds: [tag.id] }], boundaryGroups: [] };
+assert.equal(mapHasTag(map, tag.id), true);
+assert.deepEqual(projectCounts(workspace, [map], project.id), { folders: 2, files: 2 });
+assert.equal(validWorkspace({ ...workspace, folders: [{ ...parent, parentId: child.id }, child] }), false, 'Folder cycles are rejected');
+assert.equal(validWorkspace({ ...workspace, files: [{ ...file, folderId: id(9) }] }), false, 'Orphan files are rejected');
+assert.deepEqual(normalizeWorkspace(null), emptyWorkspace());
+assert.deepEqual(normalizeWorkspace({ projects: [project] }).files, []);
+console.log('Workspace: nested folders, cloud file metadata, tags, counts and validation OK.');

@@ -6,9 +6,12 @@ export type LineStyle = { color?: string; width?: number; pattern?: 'solid' | 'd
 export type NodeStyle = Pick<MindNode, 'background' | 'border' | 'color' | 'shape' | 'icon' | 'fontSize' | 'fontFamily' | 'lineSpacing' | 'letterSpacing' | 'bold' | 'italic' | 'underline' | 'strike' | 'textAlign' | 'textVerticalAlign' | 'wrapText' | 'textTransform' | 'width' | 'height' | 'minWidth' | 'maxWidth' | 'minHeight' | 'maxHeight' | 'padding' | 'paddingTop' | 'paddingRight' | 'paddingBottom' | 'paddingLeft' | 'cornerRadius' | 'borderWidth' | 'borderStyle'>;
 export type NodeComment = { id: string; text: string; createdAt: number };
 export type NodeNote = { id: string; text: string; createdAt: number };
+export type TagDefinition = { id: string; name: string; color: string };
+export type BoundaryGroup = { id: string; nodeIds: string[]; tagIds?: string[] };
 export type MindNode = {
   id: string; parentId: string | null; text: string; x: number; y: number;
   side?: 'left' | 'right'; branchLayout?: LayoutMode; collapsed?: boolean; note?: string; notes?: NodeNote[]; url?: string;
+  tagIds?: string[]; boundaryTagIds?: string[];
   flowDecision?: boolean; flowAnswer?: 'yes' | 'no';
   conceptRelation?: string; timelineDate?: string; treemapValue?: number;
   matrixRows?: string[]; matrixColumns?: string[]; matrixRow?: number; matrixColumn?: number;
@@ -26,4 +29,4 @@ export type MindNode = {
   underline?: boolean; strike?: boolean; textAlign?: 'left' | 'center' | 'right' | 'justify';
   textTransform?: 'none' | 'uppercase' | 'lowercase';
 };
-export type MindMap = { id: string; title: string; nodes: MindNode[]; layout: LayoutMode; updatedAt: number; shareToken?: string | null; movementMode?: MovementMode; avoidOverlap?: boolean; siblingReorder?: boolean; relationships?: { id: string; source: string; target: string; sourceHandle?: string; targetHandle?: string; label?: string; style?: LineStyle }[]; favoriteIcons?: string[]; spacing?: { x: number; y: number }; defaultNodeStyle?: Partial<NodeStyle>; stylePresets?: { id: string; name: string; style: Partial<NodeStyle> }[]; levelReferences?: { parentId: string | null; mode: 'size' | 'format' | 'both'; style: Partial<NodeStyle> }[]; levelStyles?: { depth: number; style: Partial<NodeStyle>; autoWidth?: boolean; autoHeight?: boolean; repeatAfter?: boolean }[]; levelConnections?: { parentId: string; style: LineStyle }[] };
+export type MindMap = { id: string; title: string; nodes: MindNode[]; layout: LayoutMode; updatedAt: number; shareToken?: string | null; projectId?: string; folderId?: string; tagDefinitions?: TagDefinition[]; boundaryGroups?: BoundaryGroup[]; movementMode?: MovementMode; avoidOverlap?: boolean; siblingReorder?: boolean; relationships?: { id: string; source: string; target: string; sourceHandle?: string; targetHandle?: string; label?: string; style?: LineStyle }[]; favoriteIcons?: string[]; spacing?: { x: number; y: number }; defaultNodeStyle?: Partial<NodeStyle>; stylePresets?: { id: string; name: string; style: Partial<NodeStyle> }[]; levelReferences?: { parentId: string | null; mode: 'size' | 'format' | 'both'; style: Partial<NodeStyle> }[]; levelStyles?: { depth: number; style: Partial<NodeStyle>; autoWidth?: boolean; autoHeight?: boolean; repeatAfter?: boolean }[]; levelConnections?: { parentId: string; style: LineStyle }[] };

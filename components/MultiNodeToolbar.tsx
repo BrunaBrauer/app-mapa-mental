@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { AlignCenter, AlignLeft, AlignRight, Box, GitBranch, Move, Trash2, Type, X } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, Box, GitBranch, Move, Scan, Trash2, Type, X } from 'lucide-react';
 import type { ImportedFont } from '../lib/fonts';
 import type { AlignCommand } from '../lib/movement';
 import type { MindMap, MindNode } from '../types';
@@ -19,10 +19,11 @@ type Props = {
   onAlign: (command: AlignCommand) => void;
   onVisual: (scope: VisualScope, operation: VisualOperation, value?: number, styleGroups?: VisualStyleGroup[]) => void;
   onDelete: () => void;
+  onBoundary: () => void;
   onClear: () => void;
 };
 
-export default function MultiNodeToolbar({ map, nodes, fonts, favoriteIcons, onPatch, onImportFont, onFavoriteIcons, onAlign, onVisual, onDelete, onClear }: Props) {
+export default function MultiNodeToolbar({ map, nodes, fonts, favoriteIcons, onPatch, onImportFont, onFavoriteIcons, onAlign, onVisual, onDelete, onBoundary, onClear }: Props) {
   const [panel, setPanel] = useState<'text' | 'node' | 'line' | 'arrange' | null>(null);
   const exemplar = nodes.at(-1)!;
   const lineExemplar = nodes.find(node => node.parentId);
@@ -33,6 +34,7 @@ export default function MultiNodeToolbar({ map, nodes, fonts, favoriteIcons, onP
       <button className={panel === 'text' ? 'active' : ''} onClick={() => setPanel(panel === 'text' ? null : 'text')} title="Editar texto e ícones do grupo"><Type size={17}/> Texto</button>
       <button className={panel === 'node' ? 'active' : ''} onClick={() => setPanel(panel === 'node' ? null : 'node')} title="Editar nós do grupo"><Box size={17}/> Nó</button>
       <button className={panel === 'line' ? 'active' : ''} disabled={!lineExemplar} onClick={() => setPanel(panel === 'line' ? null : 'line')} title="Editar linhas do grupo"><GitBranch size={17}/> Linha</button>
+      <button onClick={onBoundary} title="Criar ou remover limite dos nós selecionados e seus descendentes"><Scan size={17}/> Limite</button>
       <span className="multi-selection-divider"/><button onClick={() => onAlign('left')} title="Alinhar à esquerda" aria-label="Alinhar nós à esquerda"><AlignLeft size={17}/></button><button onClick={() => onAlign('center-x')} title="Centralizar horizontalmente" aria-label="Centralizar horizontalmente"><AlignCenter size={17}/></button><button onClick={() => onAlign('right')} title="Alinhar à direita" aria-label="Alinhar nós à direita"><AlignRight size={17}/></button><button className={panel === 'arrange' ? 'active' : ''} onClick={() => setPanel(panel === 'arrange' ? null : 'arrange')} title="Mais opções de alinhamento e distribuição"><Move size={16}/> Organizar</button>
       <span className="multi-selection-divider"/><button className="multi-danger" onClick={onDelete} title="Excluir nós selecionados"><Trash2 size={16}/></button><button onClick={onClear} title="Limpar seleção"><X size={17}/></button>
     </div>

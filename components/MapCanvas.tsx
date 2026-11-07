@@ -5,7 +5,7 @@ import MindNodeView, { type FlowMindNode } from './MindNodeView';
 import type { ImportedFont } from '../lib/fonts';
 import StyledEdge from './StyledEdge';
 import type { NodeAction, NodePanel } from './NodeQuickToolbar';
-import type { LineStyle, MindMap, MindNode } from '../types';
+import type { LineStyle, MindMap, MindNode, TagDefinition } from '../types';
 import { branchCounts, branchDirection, descendants, layoutMap, layoutSize, matrixGeometry, packTreeLayout, swimlaneGeometry, treemapRects, visibleNodes } from '../lib/maps';
 import { collectNodeDimensions, effectiveAvoidOverlap, movementModes, projectDrag, reparentBranch, reorderAlignedSibling, reorganizeBranch, snapMoveAwayFromOverlap, visualSize } from '../lib/movement';
 import { alignedHandles } from '../lib/edge-geometry';
@@ -13,12 +13,12 @@ import { applySiblingAlignments } from '../lib/visual-standardization';
 import type { VisualOperation, VisualScope, VisualStyleGroup } from '../lib/visual-standardization';
 import type { MovementMode } from '../types';
 
-type Props = { map: MindMap; selectedId: string | null; selectedIds?: string[]; globalMovementMode?: MovementMode; globalAvoidOverlap?: boolean; temporaryBranchId?: string | null; onTemporaryBranchDone?: () => void; onMoveNotice?: (message: string) => void; onSelect: (id: string | null) => void; onSelectMany?: (ids: string[]) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onGeometryChange?: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onVisual?: (ids: string[], scope: VisualScope, operation: VisualOperation, value?: number, styleGroups?: VisualStyleGroup[]) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: NodePanel; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
+type Props = { map: MindMap; selectedId: string | null; selectedIds?: string[]; globalMovementMode?: MovementMode; globalAvoidOverlap?: boolean; temporaryBranchId?: string | null; onTemporaryBranchDone?: () => void; onMoveNotice?: (message: string) => void; onSelect: (id: string | null) => void; onSelectMany?: (ids: string[]) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onGeometryChange?: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onVisual?: (ids: string[], scope: VisualScope, operation: VisualOperation, value?: number, styleGroups?: VisualStyleGroup[]) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; onTagToggle?: (nodeId: string, tagId: string, target: 'node' | 'boundary') => void; tags?: TagDefinition[]; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: NodePanel; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
 const nodeTypes = { mind: MindNodeView };
 const edgeTypes = { styled: StyledEdge };
 const edgeMarker = (symbol: LineStyle['end'], color: string) => symbol === 'arrow' ? { type: MarkerType.ArrowClosed, color, width: 14, height: 14 } : undefined;
 const edgeDash = (style?: LineStyle) => style?.pattern === 'dashed' ? '8 5' : style?.pattern === 'dotted' ? '2 5' : undefined;
-function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] : [], globalMovementMode = 'hierarchical', globalAvoidOverlap = true, temporaryBranchId, onTemporaryBranchDone, onMoveNotice, onSelect, onSelectMany, onSelectEdge, onChange, onGeometryChange, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
+function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] : [], globalMovementMode = 'hierarchical', globalAvoidOverlap = true, temporaryBranchId, onTemporaryBranchDone, onMoveNotice, onSelect, onSelectMany, onSelectEdge, onChange, onGeometryChange, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, onTagToggle, tags, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
@@ -96,11 +96,11 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
         toolbarVisible: selectedIds.length === 1 && (alwaysToolbar || contextNodeId === item.id || quickPanel?.id === item.id),
         alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onMeasured: onGeometryChange ? onMeasured : undefined, onAction, onVisual,
         onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont,
-        favoriteIcons: map.favoriteIcons || [], onFavoriteIcons, presets: map.stylePresets || [],
+        favoriteIcons: map.favoriteIcons || [], onFavoriteIcons, presets: map.stylePresets || [], tags: tags || map.tagDefinitions || [], onTagToggle,
         requestedPanel: quickPanel?.id === item.id ? quickPanel : null,
       },
     }));
-  }, [displayVisible, map, globalMovementMode, globalAvoidOverlap, selectedIds, contextNodeId, quickPanel, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onMeasured, onGeometryChange, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, fonts, onImportFont, onFavoriteIcons]);
+  }, [displayVisible, map, globalMovementMode, globalAvoidOverlap, selectedIds, contextNodeId, quickPanel, alwaysToolbar, onToggleAlwaysToolbar, readOnly, onAdd, onEdit, onToggle, onMeasured, onGeometryChange, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, onTagToggle, tags, fonts, onImportFont, onFavoriteIcons]);
   // Preserve unchanged node/data references during pointer movement.
   const nodes = useMemo(() => baseNodes.map(node => {
     const position = livePositions.get(node.id);
@@ -178,12 +178,19 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     const relationships = (map.relationships || []).filter(link => byId.has(link.source) && byId.has(link.target)).map(link => { const line = link.style; const color = line?.color || '#41baa3'; const source = byId.get(link.source)!; const target = byId.get(link.target)!; const aligned = alignedHandles(source, target); const sourceHandle = link.sourceHandle || aligned.sourceHandle; const targetHandle = link.targetHandle || aligned.targetHandle; return { id: link.id, source: link.source, target: link.target, sourceHandle, targetHandle, type: 'styled', data: { line: { pattern: 'dashed' as const, ...line, color } }, label: link.label || (map.layout === 'concept' ? 'relaciona-se' : undefined), style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) ?? '6 4' }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) }; });
     return [...tree, ...cycle, ...laneEdges, ...relationships];
   }, [displayVisible, map.layout, map.relationships, livePositions]);
-  const annotations = useMemo(() => map.layout === 'treemap' ? [] : visible.filter(n => n.boundary || n.summary).map(node => {
-    const branchIds = descendants(map.nodes, node.id); const branch = visible.filter(item => branchIds.has(item.id));
-    const x = Math.min(...branch.map(item => item.x)) - 28; const y = Math.min(...branch.map(item => item.y)) - 28;
-    const right = Math.max(...branch.map(item => item.x + 230)) + 28; const bottom = Math.max(...branch.map(item => item.y + 85)) + 28;
-    return { node, x, y, width: right - x, height: bottom - y };
-  }), [visible, map.nodes, map.layout]);
+  const annotations = useMemo(() => {
+    if (map.layout === 'treemap') return [];
+    const legacy = visible.filter(node => node.boundary || node.summary).map(node => ({ id: node.id, anchorIds: [node.id], boundary: Boolean(node.boundary), summary: node.summary, tagIds: node.boundaryTagIds || [] }));
+    const groups = (map.boundaryGroups || []).map(group => ({ id: group.id, anchorIds: group.nodeIds, boundary: true, summary: undefined, tagIds: group.tagIds || [] }));
+    return [...legacy, ...groups].flatMap(group => {
+      const ids = new Set(group.anchorIds.flatMap(id => [...descendants(map.nodes, id)]));
+      const branch = visible.filter(item => ids.has(item.id)).map(item => { const live = livePositions.get(item.id); return live ? { ...item, x: live.x, y: live.y } : item; });
+      if (!branch.length) return [];
+      const x = Math.min(...branch.map(item => item.x)) - 28, y = Math.min(...branch.map(item => item.y)) - 28;
+      const right = Math.max(...branch.map(item => item.x + layoutSize(item).width)) + 28, bottom = Math.max(...branch.map(item => item.y + layoutSize(item).height)) + 28;
+      return [{ ...group, x, y, width: right - x, height: bottom - y }];
+    });
+  }, [visible, map.nodes, map.boundaryGroups, map.layout, livePositions]);
   const diagramBackdrop = useMemo(() => {
     const root = visible.find(node => !node.parentId && !node.floating);
     if (!root) return null;
@@ -354,7 +361,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     <ReactFlow proOptions={{ hideAttribution: true }} autoPanOnNodeFocus={false} autoPanOnNodeDrag={false} panActivationKeyCode={null} nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onNodeDragStart={() => { if (dropCleanup.current) clearTimeout(dropCleanup.current); clearDropTarget(); }} onNodeDrag={(event, node) => { const pointer = 'changedTouches' in event ? event.changedTouches[0] : event; if (dragPositions.current.size <= 1 && pointer) inspectDropTarget(pointer.clientX, pointer.clientY, node.id); else clearDropTarget(); }} onNodeDragStop={(event, node) => { const pointer = 'changedTouches' in event ? event.changedTouches[0] : event; if (dragPositions.current.size && pointer) inspectDropTarget(pointer.clientX, pointer.clientY, node.id); dropCleanup.current = setTimeout(clearDropTarget, 150); }} onConnect={onConnect} onConnectEnd={onConnectEnd} onNodeClick={(event, node) => { setContextNodeId(null); if (!event.ctrlKey && !event.metaKey && !event.shiftKey) onSelect(node.id); }} onEdgeClick={(_event, edge) => { if (readOnly) return; if (map.relationships?.some(link => link.id === edge.id)) onSelectEdge?.(edge.id); else onSelect(edge.target); }} onNodeContextMenu={(event, node) => { if (readOnly) return; event.preventDefault(); setContextNodeId(node.id); onOpenQuick?.(node.id, 'movement'); }} onPaneClick={(event) => { if (event.ctrlKey || event.metaKey) return; setContextNodeId(null); onSelect(null); }} fitView fitViewOptions={{ padding: 0.3, maxZoom: 1 }} minZoom={0.18} maxZoom={2.5} panOnDrag={spaceHeld ? [0, 1, 2] : [1, 2]} zoomOnScroll zoomOnDoubleClick={false} selectionOnDrag={false} selectionKeyCode={readOnly ? null : ["Control", "Meta", "Shift"]} multiSelectionKeyCode={["Control", "Meta"]} selectionMode={SelectionMode.Partial} deleteKeyCode={null} nodeDragThreshold={3} nodesConnectable={!readOnly} connectionMode={ConnectionMode.Loose} nodesDraggable={!readOnly} elementsSelectable={!readOnly} connectionLineType={ConnectionLineType.SmoothStep}>
       {grid && <Background variant={BackgroundVariant.Dots} gap={22} size={1.1} color="#dadde9" />}
       <ViewportPortal>{diagramBackdrop}{concentricRings.map(ring => <div key={`ring-${ring.depth}`} className="concentric-ring" style={{ left: ring.x, top: ring.y, width: ring.diameter, height: ring.diameter }}/>)}</ViewportPortal>
-      <ViewportPortal>{annotations.map(({ node, x, y, width, height }) => <div key={node.id} className="branch-annotation" style={{ left: x, top: y, width, height }}>{node.boundary && <div className="branch-boundary"/>}{node.summary && <div className="branch-summary">{node.summary}</div>}</div>)}</ViewportPortal>
+      <ViewportPortal>{annotations.map(({ id, boundary, summary, tagIds, x, y, width, height }) => <div key={id} className="branch-annotation" style={{ left: x, top: y, width, height }}>{boundary && <div className="branch-boundary"/>}{Boolean(tagIds.length) && <div className="branch-tag-icons">{tagIds.map(tagId => { const tag = map.tagDefinitions?.find(item => item.id === tagId); return <span key={tagId} title={tag?.name || 'Etiqueta'} style={{ color: tag?.color || '#7057e8' }}>◆</span>; })}</div>}{summary && <div className="branch-summary">{summary}</div>}</div>)}</ViewportPortal>
       <Controls position="bottom-left" showInteractive={false}/>
     </ReactFlow>
 
