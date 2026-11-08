@@ -9,8 +9,10 @@ const movementUrl = url((await compile('lib/movement.ts')).replace("'./maps'", J
 const styleUrl = url(await compile('lib/node-style.ts'));
 const modelUrl = url(await compile('lib/style-models.ts'));
 const visualUrl = url((await compile('lib/visual-standardization.ts')).replace("'./maps'", JSON.stringify(mapsUrl)).replace("'./movement'", JSON.stringify(movementUrl)).replace("'./node-style'", JSON.stringify(styleUrl)).replace("'./style-models'", JSON.stringify(modelUrl)));
-const { autoLayout } = await import(mapsUrl);
+const { autoLayout, createMap, layoutMap } = await import(mapsUrl);
 const { applyVisualStandard, applySiblingAlignments, markStyleOverrides, patchVisualNodes, styleNewNodes, spreadSiblingOverlaps, visualScopeIds } = await import(visualUrl);
+const groupResizeUrl = url((await compile('lib/group-resize.ts')).replace("'./maps'", JSON.stringify(mapsUrl)).replace("'./visual-standardization'", JSON.stringify(visualUrl)));
+const { resizeNodeGroup } = await import(groupResizeUrl);
 
 const nodes = [
   { id: 'root', parentId: null, text: 'Centro', x: 0, y: 0 },
@@ -106,4 +108,19 @@ const largeMap = { ...map, nodes: [nodes[0], ...Array.from({ length: 150 }, (_, 
 const start = performance.now();
 assert.equal(applyVisualStandard(largeMap, ['many-0'], 'siblings', 'uniform-width').nodes.length, 151);
 assert.ok(performance.now() - start < 1200, 'Padronizar 150 irmãos deve permanecer responsivo.');
+const freshMap = createMap();
+assert.equal(freshMap.nodes[0].color, '#000000');
+assert.equal(freshMap.nodes[0].border, '#000000');
+assert.equal(freshMap.siblingReorder, true);
+const resizeBase = new Map([['a', { width: 120, height: 50 }], ['b', { width: 180, height: 50 }]]);
+const groupResized = resizeNodeGroup(map, ['a', 'b'], 35, 18, resizeBase, true);
+assert.deepEqual([get(groupResized, 'a').width, get(groupResized, 'b').width], [155, 215]);
+assert.deepEqual([get(groupResized, 'a').height, get(groupResized, 'b').height], [68, 68]);
+assert.deepEqual(groupResized.nodes.map(node => node.parentId), map.nodes.map(node => node.parentId));
+const lockedResize = resizeNodeGroup({ ...map, nodes: map.nodes.map(node => node.id === 'a' ? { ...node, sizeLocked: true } : node) }, ['a', 'b'], 35, 18, resizeBase);
+assert.equal(get(lockedResize, 'a').width, 120);
+assert.equal(get(lockedResize, 'b').width, 215);
+const compacted = layoutMap(nodes.filter(node => node.id !== 'a1'), 'horizontal');
+assert.equal(compacted.length, nodes.length - 1);
+assert.ok(compacted.every(node => !node.parentId || compacted.some(parent => parent.id === node.parentId)));
 console.log('Padrão visual: alinhamento, escopos, dimensões, bloqueios, estilo por nível e herança OK.');

@@ -1,8 +1,8 @@
 import type { MindMap, MindNode, LayoutMode } from '../types';
 
 export const uid = () => crypto.randomUUID();
-export const rootNode = (text = 'Ideia central'): MindNode => ({ id: uid(), parentId: null, text, x: 0, y: 0, icon: '', background: '#ffffff', border: '#000000', color: '#20243b', fontSize: 18, bold: true });
-export function createMap(title = 'Mapa sem título'): MindMap { return { id: uid(), title, layout: 'horizontal', nodes: [rootNode()], updatedAt: Date.now() }; }
+export const rootNode = (text = 'Ideia central'): MindNode => ({ id: uid(), parentId: null, text, x: 0, y: 0, icon: '', background: '#ffffff', border: '#000000', color: '#000000', fontSize: 18, bold: true });
+export function createMap(title = 'Mapa sem título'): MindMap { return { id: uid(), title, layout: 'horizontal', siblingReorder: true, nodes: [rootNode()], updatedAt: Date.now() }; }
 
 const templateData = {
   projeto: [['Objetivos', 'Escopo', 'Resultados'], ['Planejamento', 'Cronograma', 'Recursos'], ['Execução', 'Tarefas', 'Responsáveis'], ['Avaliação', 'Indicadores', 'Próximos passos']],

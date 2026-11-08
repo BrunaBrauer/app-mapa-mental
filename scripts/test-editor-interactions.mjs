@@ -19,8 +19,8 @@ assert.match(canvas, /autoPanOnNodeDrag=\{false\}/, 'Dragging must not pan the m
 assert.match(richText, /onKeyDown=\{event => \{ event\.stopPropagation\(\);/, 'Text keystrokes must stay inside the editor');
 assert.match(css, /caret-color:var\(--accent\)/, 'The insertion caret must remain visible');
 assert.match(css, /react-flow__node\.draggable\.dragging \.mind-node\{cursor:grabbing\}/, 'Dragging must expose a stable cursor');
-assert.match(canvas, /map\.siblingReorder && requested\.size === 1/, 'Aligned reordering must be opt-in');
-assert.match(movementSettings, /checked=\{Boolean\(map\.siblingReorder\)\}/, 'The map must expose an aligned-reordering toggle');
+assert.match(canvas, /map\.siblingReorder !== false && requested\.size === 1/, 'Aligned reordering is enabled by default and can be disabled');
+assert.match(movementSettings, /checked=\{map\.siblingReorder !== false\}/, 'The map must expose an aligned-reordering toggle');
 for (const side of ['left', 'right', 'top', 'bottom']) assert.match(nodeView, new RegExp(`type="target" id="target-${side}"`), `Tree edges need a registered ${side} target handle`);
 assert.match(nodeView, /node-underline-rule[\s\S]*?item\.connectionStyle\?\.width[\s\S]*?item\.connectionStyle\?\.pattern[\s\S]*?item\.connectionStyle\?\.color/, 'The underlined rule follows the incoming line width, pattern and color');
 assert.match(canvas, /reparentBranch\(next, sourceId, targetId\)/, 'Dropping one node over another updates the hierarchy');

@@ -27,7 +27,7 @@ export default function QuickTextPanel({ node, fonts, favorites, onPatch, onImpo
   const [highlight, setHighlight] = useState('#ffff00');
   const [search, setSearch] = useState('');
   const [custom, setCustom] = useState('');
-  const color = node.color && hex.test(node.color) ? node.color : '#20243b';
+  const color = node.color && hex.test(node.color) ? node.color : '#000000';
   const fontSize = node.fontSize || (!node.parentId && !node.floating ? 18 : 14);
   const shownColor = textColorPreview ?? color;
   const available = [...new Set([...favorites, ...symbols])].filter(value => value.includes(search));

@@ -15,12 +15,12 @@ import { applySiblingAlignments } from '../lib/visual-standardization';
 import type { VisualOperation, VisualScope, VisualStyleGroup } from '../lib/visual-standardization';
 import type { MovementMode } from '../types';
 
-type Props = { map: MindMap; selectedId: string | null; selectedIds?: string[]; selectedBoundary?: BoundarySelection | null; onSelectBoundary?: (selection: BoundarySelection) => void; globalMovementMode?: MovementMode; globalAvoidOverlap?: boolean; temporaryBranchId?: string | null; onTemporaryBranchDone?: () => void; onMoveNotice?: (message: string) => void; onSelect: (id: string | null) => void; onSelectMany?: (ids: string[]) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onGeometryChange?: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onVisual?: (ids: string[], scope: VisualScope, operation: VisualOperation, value?: number, styleGroups?: VisualStyleGroup[]) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; onTagToggle?: (nodeId: string, tagId: string, target: 'node' | 'boundary') => void; onCreateTag?: (nodeId: string, name: string, color: string, target: 'node' | 'boundary') => Promise<boolean>; tags?: TagDefinition[]; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: NodePanel; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
+type Props = { map: MindMap; previewNodes?: MindNode[]; resizingGroup?: boolean; selectedId: string | null; selectedIds?: string[]; selectedBoundary?: BoundarySelection | null; onSelectBoundary?: (selection: BoundarySelection) => void; globalMovementMode?: MovementMode; globalAvoidOverlap?: boolean; temporaryBranchId?: string | null; onTemporaryBranchDone?: () => void; onMoveNotice?: (message: string) => void; onSelect: (id: string | null) => void; onSelectMany?: (ids: string[]) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onGeometryChange?: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onVisual?: (ids: string[], scope: VisualScope, operation: VisualOperation, value?: number, styleGroups?: VisualStyleGroup[]) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; onTagToggle?: (nodeId: string, tagId: string, target: 'node' | 'boundary') => void; onCreateTag?: (nodeId: string, name: string, color: string, target: 'node' | 'boundary') => Promise<boolean>; tags?: TagDefinition[]; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: NodePanel; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
 const nodeTypes = { mind: MindNodeView };
 const edgeTypes = { styled: StyledEdge };
 const edgeMarker = (symbol: LineStyle['end'], color: string) => symbol === 'arrow' ? { type: MarkerType.ArrowClosed, color, width: 14, height: 14 } : undefined;
 const edgeDash = (style?: LineStyle) => style?.pattern === 'dashed' ? '8 5' : style?.pattern === 'dotted' ? '2 5' : undefined;
-function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] : [], selectedBoundary, onSelectBoundary, globalMovementMode = 'hierarchical', globalAvoidOverlap = true, temporaryBranchId, onTemporaryBranchDone, onMoveNotice, onSelect, onSelectMany, onSelectEdge, onChange, onGeometryChange, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, onTagToggle, onCreateTag, tags, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
+function InnerCanvas({ map, previewNodes, resizingGroup = false, selectedId, selectedIds = selectedId ? [selectedId] : [], selectedBoundary, onSelectBoundary, globalMovementMode = 'hierarchical', globalAvoidOverlap = true, temporaryBranchId, onTemporaryBranchDone, onMoveNotice, onSelect, onSelectMany, onSelectEdge, onChange, onGeometryChange, onAdd, onEdit, onToggle, onAction, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, onTagToggle, onCreateTag, tags, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
@@ -47,6 +47,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
   useEffect(() => { if (geometryTimer.current) clearTimeout(geometryTimer.current); geometryTimer.current = null; }, [map.id]);
   useEffect(() => () => { if (geometryTimer.current) clearTimeout(geometryTimer.current); }, []);
   const onMeasured = useCallback((id: string, size: { width: number; height: number }) => {
+    if (resizingGroup) return;
     if (measuredMapId.current !== map.id) { measuredSizes.current.clear(); measuredMapId.current = map.id; }
     const previous = measuredSizes.current.get(id);
     measuredSizes.current.set(id, size);
@@ -66,7 +67,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
         : packTreeLayout(current.nodes, current.layout, measuredSizes.current, current.spacing);
       if (nodes.some((node, index) => Math.abs(node.x - current.nodes[index].x) > 1 || Math.abs(node.y - current.nodes[index].y) > 1)) geometryChange.current({ ...current, nodes });
     }, 120);
-  }, [map.id]);
+  }, [map.id, resizingGroup]);
   const automaticPreview = useRef(new Map<string, Map<string, { x: number; y: number }>>());
   const [livePositions, setLivePositions] = useState(() => new Map<string, { x: number; y: number; dragging: boolean; source: boolean }>());
   const selectionRef = useRef(selectedIds);
@@ -76,7 +77,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     flowRef.current = { zoomIn: () => zoomIn(), zoomOut: () => zoomOut(), fit: () => fitView({ padding: 0.22, duration: 400 }) };
     return () => { flowRef.current = null; };
   }, [flowRef, zoomIn, zoomOut, fitView]);
-  const visible = useMemo(() => visibleNodes(map.nodes), [map.nodes]);
+  const visible = useMemo(() => visibleNodes(previewNodes || map.nodes), [previewNodes, map.nodes]);
   const displayVisible = useMemo(() => {
     if (map.layout !== 'treemap') return visible;
     const rects = treemapRects(map.nodes);
@@ -137,11 +138,11 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
     const line = n.connectionStyle;
     const underline = target.shape === 'underline' || parent.shape === 'underline';
     const underlineColor = target.shape === 'underline' ? target.border : parent.shape === 'underline' ? parent.border : undefined;
-    const color = line?.color || (underlineColor === 'transparent' ? undefined : underlineColor) || (underline ? '#000000' : '#b9b4db');
+    const color = line?.color || (underlineColor === 'transparent' ? undefined : underlineColor) || '#000000';
     const edgeLine = { ...line, color, width: line?.width ?? (underline ? target.borderWidth ?? parent.borderWidth ?? 2 : 2), pattern: line?.pattern ?? (target.shape === 'underline' ? target.borderStyle : undefined) };
     const label = map.layout === 'flowchart' && parent.flowDecision ? n.flowAnswer === 'yes' ? 'Sim' : n.flowAnswer === 'no' ? 'Não' : undefined
       : map.layout === 'concept' ? n.conceptRelation || 'relaciona-se' : undefined;
-    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: edgeLine, route: underlinedSide ? 'inline-underline' as const : horizontalTree ? 'horizontal-tree' as const : undefined }, animated: false, style: { stroke: color, strokeWidth: edgeLine.width, strokeDasharray: edgeDash(edgeLine) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? (target.shape === 'underline' ? 'none' : 'arrow'), color) };
+    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: edgeLine, route: underlinedSide ? 'inline-underline' as const : horizontalTree ? 'horizontal-tree' as const : undefined }, animated: false, style: { stroke: color, strokeWidth: edgeLine.width, strokeDasharray: edgeDash(edgeLine) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'none', color) };
     });
     const cycle = stages.length < 2 ? [] : stages.map((stage, index) => {
       const target = stages[(index + 1) % stages.length];
@@ -181,7 +182,7 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
           markerEnd: edgeMarker('arrow', '#8a7af0'), style: { stroke: '#8a7af0', strokeWidth: 2 } }));
       });
     })();
-    const relationships = (map.relationships || []).filter(link => byId.has(link.source) && byId.has(link.target)).map(link => { const line = link.style; const color = line?.color || '#41baa3'; const source = byId.get(link.source)!; const target = byId.get(link.target)!; const aligned = alignedHandles(source, target); const sourceHandle = link.sourceHandle || aligned.sourceHandle; const targetHandle = link.targetHandle || aligned.targetHandle; return { id: link.id, source: link.source, target: link.target, sourceHandle, targetHandle, type: 'styled', data: { line: { pattern: 'dashed' as const, ...line, color } }, label: link.label || (map.layout === 'concept' ? 'relaciona-se' : undefined), style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) ?? '6 4' }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'arrow', color) }; });
+    const relationships = (map.relationships || []).filter(link => byId.has(link.source) && byId.has(link.target)).map(link => { const line = link.style; const color = line?.color || '#41baa3'; const source = byId.get(link.source)!; const target = byId.get(link.target)!; const aligned = alignedHandles(source, target); const sourceHandle = link.sourceHandle || aligned.sourceHandle; const targetHandle = link.targetHandle || aligned.targetHandle; return { id: link.id, source: link.source, target: link.target, sourceHandle, targetHandle, type: 'styled', data: { line: { pattern: 'dashed' as const, ...line, color } }, label: link.label || (map.layout === 'concept' ? 'relaciona-se' : undefined), style: { stroke: color, strokeWidth: line?.width ?? 2, strokeDasharray: edgeDash(line) ?? '6 4' }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'none', color) }; });
     return [...tree, ...cycle, ...laneEdges, ...relationships];
   }, [displayVisible, map.layout, map.relationships, livePositions]);
   const annotations = useMemo(() => {
@@ -317,7 +318,8 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
       const changed = next.nodes.some((node, index) => node.x !== map.nodes[index].x || node.y !== map.nodes[index].y);
       if (changed) {
         const dimensions = collectNodeDimensions();
-        const reorderId = map.siblingReorder && requested.size === 1 ? [...requested.keys()][0] : null;
+        const automaticLayout = map.layout !== 'free' && map.layout !== 'network';
+        const reorderId = automaticLayout && map.siblingReorder !== false && requested.size === 1 ? [...requested.keys()][0] : null;
         const siblingOrder = reorderId ? reorderAlignedSibling(next, reorderId, dimensions) : null;
         if (siblingOrder?.blocked) onMoveNotice?.('Um dos subnós deste grupo está com a posição bloqueada. Desbloqueie-o antes de reordenar.');
         else if (siblingOrder?.parentId) {
@@ -326,13 +328,13 @@ function InnerCanvas({ map, selectedId, selectedIds = selectedId ? [selectedId] 
         }
         if (!siblingOrder?.parentId && !siblingOrder?.blocked) for (const id of projected.automaticRoots) next = applySiblingAlignments(reorganizeBranch(next, id, effectiveAvoidOverlap(next, id, globalAvoidOverlap), dimensions), descendants(next.nodes, id));
         const movedIds = new Set(projected.positions.keys());
-        const collisionPrevention = [...requested.keys()].some(id => effectiveAvoidOverlap(map, id, globalAvoidOverlap));
+        const collisionPrevention = !automaticLayout && [...requested.keys()].some(id => effectiveAvoidOverlap(map, id, globalAvoidOverlap));
         const landing = siblingOrder?.blocked ? { map, adjusted: false, blocked: false } : siblingOrder?.parentId ? { map: next, adjusted: false, blocked: false } : collisionPrevention ? snapMoveAwayFromOverlap(next, movedIds, dimensions) : { map: next, adjusted: false, blocked: false };
         if (landing.blocked) { onMoveNotice?.('Não há espaço livre próximo para este ramo. A posição anterior foi mantida.'); }
         else {
           next = landing.map;
           if (landing.adjusted) onMoveNotice?.('O ramo foi deslocado até uma posição livre para evitar sobreposição.');
-          onChange(next);
+          onChange(automaticLayout ? applySiblingAlignments({ ...next, nodes: layoutMap(next.nodes, next.layout, next.spacing) }) : next);
         }
       }
     }
