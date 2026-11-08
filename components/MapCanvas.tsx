@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ReactFlow, Background, BackgroundVariant, Controls, ConnectionLineType, ConnectionMode, MarkerType, ReactFlowProvider, SelectionMode, ViewportPortal, useReactFlow, type Connection, type NodeChange, type Node, type NodePositionChange } from '@xyflow/react';
+import { ReactFlow, Background, BackgroundVariant, Controls, ConnectionLineType, ConnectionMode, MarkerType, ReactFlowProvider, SelectionMode, ViewportPortal, useReactFlow, useViewport, type Connection, type NodeChange, type Node, type NodePositionChange } from '@xyflow/react';
 import MindNodeView, { type FlowMindNode } from './MindNodeView';
 import type { ImportedFont } from '../lib/fonts';
 import StyledEdge from './StyledEdge';
@@ -15,13 +15,15 @@ import { applySiblingAlignments } from '../lib/visual-standardization';
 import type { VisualOperation, VisualScope, VisualStyleGroup } from '../lib/visual-standardization';
 import type { MovementMode } from '../types';
 
-type Props = { map: MindMap; previewNodes?: MindNode[]; resizingGroup?: boolean; selectedId: string | null; selectedIds?: string[]; selectedBoundary?: BoundarySelection | null; onSelectBoundary?: (selection: BoundarySelection) => void; globalMovementMode?: MovementMode; globalAvoidOverlap?: boolean; temporaryBranchId?: string | null; onTemporaryBranchDone?: () => void; onMoveNotice?: (message: string) => void; onSelect: (id: string | null) => void; onSelectMany?: (ids: string[]) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onGeometryChange?: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onOpenLinkedMaps?: (id: string) => void; onVisual?: (ids: string[], scope: VisualScope, operation: VisualOperation, value?: number, styleGroups?: VisualStyleGroup[]) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; onTagToggle?: (nodeId: string, tagId: string, target: 'node' | 'boundary') => void; onCreateTag?: (nodeId: string, name: string, color: string, target: 'node' | 'boundary') => Promise<boolean>; tags?: TagDefinition[]; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: NodePanel; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
+type Props = { map: MindMap; previewNodes?: MindNode[]; resizingGroup?: boolean; onResizeStart?: () => void; onResizePreview?: (dx: number, dy: number) => void; onResizeEnd?: (dx: number, dy: number) => void; onResizeCancel?: () => void; selectedId: string | null; selectedIds?: string[]; selectedBoundary?: BoundarySelection | null; onSelectBoundary?: (selection: BoundarySelection) => void; globalMovementMode?: MovementMode; globalAvoidOverlap?: boolean; temporaryBranchId?: string | null; onTemporaryBranchDone?: () => void; onMoveNotice?: (message: string) => void; onSelect: (id: string | null) => void; onSelectMany?: (ids: string[]) => void; onSelectEdge?: (id: string) => void; onChange: (map: MindMap) => void; onGeometryChange?: (map: MindMap) => void; onAdd: (id: string) => void; onEdit: (id: string, text: string) => void; onToggle: (id: string) => void; onAction?: (id: string, action: NodeAction) => void; onOpenLinkedMaps?: (id: string) => void; onVisual?: (ids: string[], scope: VisualScope, operation: VisualOperation, value?: number, styleGroups?: VisualStyleGroup[]) => void; onOpenQuick?: (id: string, panel: NodePanel) => void; onPatch?: (id: string, patch: Partial<MindNode>) => void; onImage?: (id: string, file: File) => void; onDrivePick?: (id: string, kind: 'image' | 'link') => void; onTagToggle?: (nodeId: string, tagId: string, target: 'node' | 'boundary') => void; onCreateTag?: (nodeId: string, name: string, color: string, target: 'node' | 'boundary') => Promise<boolean>; tags?: TagDefinition[]; fonts?: ImportedFont[]; onImportFont?: (id: string, file: File) => Promise<void>; onFavoriteIcons?: (icons: string[]) => void; quickPanel?: { id: string; panel: NodePanel; key: number } | null; alwaysToolbar?: boolean; onToggleAlwaysToolbar?: (value: boolean) => void; grid: boolean; readOnly?: boolean; flowRef?: React.MutableRefObject<{ zoomIn: () => void; zoomOut: () => void; fit: () => void } | null> };
 const nodeTypes = { mind: MindNodeView };
 const edgeTypes = { styled: StyledEdge };
 const edgeMarker = (symbol: LineStyle['end'], color: string) => symbol === 'arrow' ? { type: MarkerType.ArrowClosed, color, width: 14, height: 14 } : undefined;
 const edgeDash = (style?: LineStyle) => style?.pattern === 'dashed' ? '8 5' : style?.pattern === 'dotted' ? '2 5' : undefined;
-function InnerCanvas({ map, previewNodes, resizingGroup = false, selectedId, selectedIds = selectedId ? [selectedId] : [], selectedBoundary, onSelectBoundary, globalMovementMode = 'hierarchical', globalAvoidOverlap = true, temporaryBranchId, onTemporaryBranchDone, onMoveNotice, onSelect, onSelectMany, onSelectEdge, onChange, onGeometryChange, onAdd, onEdit, onToggle, onAction, onOpenLinkedMaps, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, onTagToggle, onCreateTag, tags, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
+function InnerCanvas({ map, previewNodes, resizingGroup = false, onResizeStart, onResizePreview, onResizeEnd, onResizeCancel, selectedId, selectedIds = selectedId ? [selectedId] : [], selectedBoundary, onSelectBoundary, globalMovementMode = 'hierarchical', globalAvoidOverlap = true, temporaryBranchId, onTemporaryBranchDone, onMoveNotice, onSelect, onSelectMany, onSelectEdge, onChange, onGeometryChange, onAdd, onEdit, onToggle, onAction, onOpenLinkedMaps, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, onTagToggle, onCreateTag, tags, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const viewport = useViewport();
+  const groupResizeDrag = useRef<{ x: number; y: number; zoom: number; dx: number; dy: number } | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
   const dragPositions = useRef(new Map<string, { x: number; y: number; dragging: boolean }>());
@@ -84,6 +86,23 @@ function InnerCanvas({ map, previewNodes, resizingGroup = false, selectedId, sel
     return visible.map(node => { const rect = rects.get(node.id); return rect ? { ...node, ...rect } : node; })
       .sort((a, b) => (rects.get(a.id)?.depth ?? 0) - (rects.get(b.id)?.depth ?? 0));
   }, [visible, map.layout, map.nodes]);
+  const groupSelection = useMemo(() => {
+    if (selectedIds.length < 2 || readOnly) return null;
+    const ids = new Set(selectedIds);
+    const selected = displayVisible.filter(node => ids.has(node.id));
+    if (selected.length < 2) return null;
+    const left = Math.min(...selected.map(node => node.x));
+    const top = Math.min(...selected.map(node => node.y));
+    const right = Math.max(...selected.map(node => node.x + visualSize(node, resizingGroup ? undefined : renderedSizes).width));
+    const bottom = Math.max(...selected.map(node => node.y + visualSize(node, resizingGroup ? undefined : renderedSizes).height));
+    return { left: left * viewport.zoom + viewport.x, top: top * viewport.zoom + viewport.y, width: (right - left) * viewport.zoom, height: (bottom - top) * viewport.zoom, resizable: selected.some(node => !node.sizeLocked) };
+  }, [selectedIds, displayVisible, readOnly, resizingGroup, renderedSizes, viewport]);
+  const stopGroupResize = (cancel = false) => {
+    const drag = groupResizeDrag.current;
+    if (!drag) return;
+    groupResizeDrag.current = null;
+    if (cancel) onResizeCancel?.(); else onResizeEnd?.(drag.dx, drag.dy);
+  };
   const baseNodes = useMemo<FlowMindNode[]>(() => {
     const children = new Map<string, MindNode[]>();
     for (const node of map.nodes) if (node.parentId) children.set(node.parentId, [...(children.get(node.parentId) || []), node]);
@@ -384,7 +403,7 @@ function InnerCanvas({ map, previewNodes, resizingGroup = false, selectedId, sel
       })}</ViewportPortal>
       <Controls position="bottom-left" showInteractive={false}/>
     </ReactFlow>
-
+    {groupSelection && <><div className="group-selection-frame" aria-hidden="true" style={{ left: groupSelection.left - 5, top: groupSelection.top - 5, width: groupSelection.width + 10, height: groupSelection.height + 10 }}/><button type="button" className="group-selection-resize nodrag nopan" style={{ left: `clamp(12px, ${groupSelection.left + groupSelection.width + 5}px, calc(100% - 12px))`, top: `clamp(12px, ${groupSelection.top + groupSelection.height + 5}px, calc(100% - 12px))` }} disabled={!groupSelection.resizable} title={groupSelection.resizable ? 'Arraste para redimensionar os nós proporcionalmente' : 'Desbloqueie o tamanho de pelo menos um nó'} aria-label="Redimensionar nós selecionados proporcionalmente" onPointerDown={event => { if (!groupSelection.resizable) return; event.preventDefault(); event.stopPropagation(); groupResizeDrag.current = { x: event.clientX, y: event.clientY, zoom: viewport.zoom, dx: 0, dy: 0 }; event.currentTarget.setPointerCapture(event.pointerId); onResizeStart?.(); }} onPointerMove={event => { const drag = groupResizeDrag.current; if (!drag) return; drag.dx = Math.round((event.clientX - drag.x) / drag.zoom); drag.dy = Math.round((event.clientY - drag.y) / drag.zoom); onResizePreview?.(drag.dx, drag.dy); }} onPointerUp={() => stopGroupResize()} onPointerCancel={() => stopGroupResize(true)}><span aria-hidden="true">⤢</span></button></>}
   </div>;
 }
 export default function MapCanvas(props: Props) { return <ReactFlowProvider key={props.map.id}><InnerCanvas {...props}/></ReactFlowProvider>; }
