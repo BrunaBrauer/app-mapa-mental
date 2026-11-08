@@ -109,6 +109,7 @@ function validNode(node: unknown): node is MindNode {
   if (!['collapsed', 'floating', 'boundary', 'bold', 'italic', 'underline', 'strike', 'positionLocked', 'inheritMovement', 'inheritMovementToChildren', 'avoidOverlap', 'sizeLocked', 'lockAspectRatio', 'wrapText', 'flowDecision'].every(key => optionalBoolean(node[key]))) return false;
   if (!['note', 'summary'].every(key => optionalText(node[key], 100_000)) || !optionalText(node.label, 1000) || !optionalText(node.equation, 10_000) || !optionalText(node.icon, 24) || !optionalText(node.fontFamily, 200)) return false;
   if (![node.tagIds, node.boundaryTagIds].every(ids => ids === undefined || Array.isArray(ids) && ids.length <= 20 && new Set(ids).size === ids.length && ids.every(id => typeof id === 'string' && uuid.test(id)))) return false;
+  if (node.linkedMapIds !== undefined && (!Array.isArray(node.linkedMapIds) || node.linkedMapIds.length > 20 || new Set(node.linkedMapIds).size !== node.linkedMapIds.length || !node.linkedMapIds.every(id => typeof id === 'string' && uuid.test(id)))) return false;
   if (node.notes !== undefined && (!Array.isArray(node.notes) || node.notes.length > 100
     || node.notes.reduce((length, note) => length + (record(note) && typeof note.text === 'string' ? note.text.length : 0), 0) > 200_000
     || new Set(node.notes.map(note => record(note) ? note.id : undefined)).size !== node.notes.length
@@ -149,6 +150,7 @@ export function validMap(value: unknown): value is MindMap {
   if (typeof value.id !== 'string' || !text(value.id, 36, false) || !uuid.test(value.id) || !text(value.title, 160) || !Array.isArray(value.nodes) || !value.nodes.length || value.nodes.length > MAX_NODES || !value.nodes.every(validNode) || !validTree(value.nodes)) return false;
   const map = value as unknown as MindMap;
   if (!oneOf(map.layout, layouts) || !finite(map.updatedAt, 0, Number.MAX_SAFE_INTEGER) || !(map.shareToken === undefined || map.shareToken === null || typeof map.shareToken === 'string' && uuid.test(map.shareToken))) return false;
+  if (map.nodes.some(node => node.linkedMapIds?.includes(map.id))) return false;
   if (![map.projectId, map.folderId].every(id => id === undefined || typeof id === 'string' && uuid.test(id))) return false;
   if (map.tagDefinitions !== undefined && (!Array.isArray(map.tagDefinitions) || map.tagDefinitions.length > 200 || new Set(map.tagDefinitions.map(tag => tag.id)).size !== map.tagDefinitions.length || !map.tagDefinitions.every(tag => record(tag) && typeof tag.id === 'string' && uuid.test(tag.id) && text(tag.name, 100, false) && /^#[0-9a-f]{6}$/i.test(String(tag.color))))) return false;
   if (!optionalOneOf(map.movementMode, movements) || !optionalBoolean(map.avoidOverlap) || !optionalBoolean(map.siblingReorder)) return false;

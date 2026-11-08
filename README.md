@@ -119,6 +119,10 @@ As dimensões começam automáticas. Em **Nó e caixa de texto → Dimensões e 
 
 Um nó pode fornecer o estilo de todo o seu nível. Alterações posteriores em um nó são guardadas como personalizações e sobrevivem à atualização do estilo herdado; **Restaurar estilo herdado** remove essas exceções no alcance escolhido. Cinco modelos de formatação para o mapa estão disponíveis no mesmo painel e exigem confirmação porque substituem as formatações atuais. O conteúdo e as relações permanecem; em layouts automáticos, um ajuste local de espaçamento pode mover irmãos para evitar sobreposição. Teste da lógica: `node scripts/test-visual-standardization.mjs`.
 
+## Mapas vinculados
+
+Selecione um nó e abra **Links e anexos → Mapas mentais vinculados** (também disponível em **Mais opções**). É possível criar um mapa de detalhamento no mesmo projeto/pasta ou vincular um mapa já existente da própria conta. O indicador no canto do nó abre diretamente o único mapa associado; quando há vários, mostra a lista para escolha. O botão **Voltar para o mapa de origem** recupera o nó de onde você partiu, inclusive em uma sequência de mapas vinculados. Cada nó aceita até 20 destinos; um mesmo mapa pode ser destino de vários nós. Os vínculos usam IDs estáveis, portanto renomear ou mover mapas não os quebra. Desvincular preserva ambos os mapas. Ao excluir um mapa de destino, a referência antiga aparece como indisponível e pode ser removida. As referências são salvas junto ao mapa de origem, sem nova tabela no Supabase. Teste: `node scripts/test-map-links.mjs`.
+
 ## Preferências da conta
 
 Tema, grade, barra lateral, exibição automática do menu, modo global de movimentação e prevenção global de sobreposição são gravados em `nodum_preferences` nos metadados do usuário autenticado no Supabase. Não são usados para autorização. A última gravação prevalece; outro dispositivo carrega as preferências ao abrir/recarregar o editor. As gravações são serializadas após 350 ms de inatividade e falhas aparecem no editor. No modo local de testes, as preferências ficam no navegador. Fontes personalizadas continuam armazenadas apenas no navegador onde foram importadas.

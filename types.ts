@@ -11,7 +11,7 @@ export type BoundaryGroup = { id: string; nodeIds: string[]; tagIds?: string[] }
 export type MindNode = {
   id: string; parentId: string | null; text: string; x: number; y: number;
   side?: 'left' | 'right'; branchLayout?: LayoutMode; collapsed?: boolean; note?: string; notes?: NodeNote[]; url?: string;
-  tagIds?: string[]; boundaryTagIds?: string[];
+  tagIds?: string[]; boundaryTagIds?: string[]; linkedMapIds?: string[];
   flowDecision?: boolean; flowAnswer?: 'yes' | 'no';
   conceptRelation?: string; timelineDate?: string; treemapValue?: number;
   matrixRows?: string[]; matrixColumns?: string[]; matrixRow?: number; matrixColumn?: number;
