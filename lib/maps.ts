@@ -292,16 +292,16 @@ type Bounds = { left: number; top: number; right: number; bottom: number };
 const treeLayouts: LayoutMode[] = ['horizontal', 'right', 'left', 'balanced', 'bilateral', 'vertical', 'down', 'up', 'org', 'org-left', 'flowchart', 'split-down'];
 export function layoutSize(node: MindNode): { width: number; height: number } {
   const declaredWidth = node.width ?? (node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 205 : node.shape === 'ellipse' ? 175 : !node.parentId && !node.floating ? 182 : 145);
-  const baseHeight = node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 118 : node.shape === 'ellipse' ? 74 : !node.parentId && !node.floating ? 44 : 36;
+  const baseHeight = node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 118 : node.shape === 'ellipse' ? 74 : !node.parentId && !node.floating ? 38 : 32;
   const fontSize = Math.max(node.fontSize ?? (!node.parentId ? 18 : 14), ...(node.richText || []).map(run => run.fontSize ?? 0));
   const lineSpacing = Math.max(node.lineSpacing ?? 1.3, ...(node.richText || []).map(run => run.lineSpacing ?? 0));
-  const sidePadding = (node.paddingLeft ?? node.padding ?? 12) + (node.paddingRight ?? node.padding ?? 12);
+  const sidePadding = (node.paddingLeft ?? node.padding ?? 8) + (node.paddingRight ?? node.padding ?? 8);
   const attachmentWidth = (node.icon ? 24 : 0) + (node.notes ? node.notes.length ? 28 : 0 : node.note ? 20 : 0) + (node.comments?.length ? 28 : 0) + (node.tagIds?.length || 0) * 20 + (node.url ? 20 : 0) + (node.task ? 22 : 0);
   const naturalWidth = Math.max(...node.text.split(/\r?\n/).map(line => line.length * fontSize * .6)) + sidePadding + attachmentWidth + 4;
   const width = node.wrapText === false ? Math.max(declaredWidth, naturalWidth) : declaredWidth;
   const textWidth = Math.max(28, width - sidePadding - attachmentWidth - 4);
   const lineCount = node.text.split(/\r?\n/).reduce((sum, line) => sum + (node.wrapText === false ? 1 : Math.max(1, Math.ceil(line.length * fontSize * .6 / textWidth))), 0);
-  const textHeight = lineCount * fontSize * lineSpacing + (node.paddingTop ?? node.padding ?? 6) + (node.paddingBottom ?? node.padding ?? 6) + (node.borderWidth ?? 2) * 2;
+  const textHeight = lineCount * fontSize * lineSpacing + (node.paddingTop ?? node.padding ?? 4) + (node.paddingBottom ?? node.padding ?? 4) + (node.borderWidth ?? 2) * 2;
   const attachmentsHeight = attachmentWidth > width - sidePadding - 35 ? 22 : 0;
   const extraHeight = (node.label ? 18 : 0) + (node.equation ? 22 : 0) + (node.mediaUrl ? 20 : 0) + (node.image ? 127 : 0);
   return { width: Math.max(width, node.minWidth ?? 0), height: Math.max(node.height ?? 0, baseHeight, textHeight + attachmentsHeight + extraHeight, node.minHeight ?? 0) };
@@ -545,7 +545,7 @@ export function treemapRects(nodes: MindNode[]): Map<string, { x: number; y: num
   return rects;
 }
 export function toMarkdown(map: MindMap): string {
-  const lines = [`# ${map.title}`, '']; const root = map.nodes.find(n => !n.parentId);
+  const lines = [`# ${map.title}`, '']; const roots = map.nodes.filter(n => !n.parentId);
   const richLabel = (node: MindNode) => {
     if (!node.richText?.length) return node.text;
     const escape = (value: string) => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
@@ -579,6 +579,6 @@ export function toMarkdown(map: MindMap): string {
       visit(n.id, depth + 1, new Set([...seen, n.id]));
     });
   };
-  if (root) { lines.push(`- ${taskLine(root)}`); details(root, 1); visit(root.id, 1, new Set([root.id])); }
+  for (const root of roots) { lines.push(`- ${taskLine(root)}`); details(root, 1); visit(root.id, 1, new Set([root.id])); }
   return lines.join('\n') + '\n';
 }

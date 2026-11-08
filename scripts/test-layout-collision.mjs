@@ -6,6 +6,8 @@ const source = await readFile('lib/maps.ts', 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { layoutConflictCount, layoutMap, layoutSize, packTreeLayout, visibleNodes } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const node = (id, parentId, width = 145, height = 50, extras = {}) => ({ id, parentId, text: id, x: 0, y: 0, width, height, ...extras });
+assert.equal(layoutSize({ id: 'compact', parentId: 'root', text: 'Ideia', x: 0, y: 0, width: 145 }).height, 32, 'Short automatic nodes use the compact readable minimum.');
+assert.ok(layoutSize({ id: 'wrapped', parentId: 'root', text: 'Um texto longo que precisa quebrar linha para ficar inteiramente visível', x: 0, y: 0, width: 100 }).height > 32, 'Wrapping still grows the node height.');
 const sourceNodes = [
   node('root', null, 182, 62),
   node('level-1-a', 'root', 230, 70, { branchLayout: 'down' }),
