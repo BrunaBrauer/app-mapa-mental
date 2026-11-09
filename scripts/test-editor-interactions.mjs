@@ -25,8 +25,18 @@ for (const side of ['left', 'right', 'top', 'bottom']) assert.match(nodeView, ne
 assert.match(nodeView, /node-underline-rule[\s\S]*?item\.connectionStyle\?\.width[\s\S]*?item\.connectionStyle\?\.pattern[\s\S]*?item\.connectionStyle\?\.color/, 'The underlined rule follows the incoming line width, pattern and color');
 assert.match(canvas, /reparentBranches\(next, sourceIds, targetId\)/, 'Dropping selected nodes over another updates their hierarchy together');
 assert.match(canvas, /const edgeLayout = parent\.branchLayout \|\| map\.layout/, 'Connections follow the parent branch layout');
-assert.match(canvas, /horizontalTree[\s\S]*?sourceHandle: 'source-right', targetHandle: 'target-left'/, 'Horizontal tree edges start on the right when the child is actually to the right');
-assert.match(canvas, /edgeLayout === 'vertical' \|\| edgeLayout === 'flowchart'[\s\S]*?sourceHandle: 'source-bottom', targetHandle: 'target-top'/, 'Vertical tree edges start at the bottom');
+assert.match(canvas, /direction === 'right' \? \{ sourceHandle: 'source-right', targetHandle: 'target-left' \}/, 'Right-facing tree edges use facing ports');
+assert.match(canvas, /direction === 'bottom' \? \{ sourceHandle: 'source-bottom', targetHandle: 'target-top' \}/, 'Vertical tree edges use the same parent port at every level');
+assert.match(canvas, /'vertical-tree' as const/, 'Vertical branches receive a shared connector route');
+assert.match(nodeView, /width: Math\.round\(size\.width\), height: Math\.round\(size\.height\)/, 'Resizing can shrink a formerly oversized node');
+const treeRouteCode = ts.transpileModule(await readFile('lib/tree-edge.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { treeEdgePath } = await import(`data:text/javascript;base64,${Buffer.from(treeRouteCode).toString('base64')}`);
+const firstBranch = treeEdgePath({ sourceX: 300, sourceY: 100, targetX: 100, targetY: 180 }, 'bottom');
+const secondBranch = treeEdgePath({ sourceX: 300, sourceY: 100, targetX: 500, targetY: 180 }, 'bottom');
+assert.match(firstBranch[0], /^M 300 100 V 124 H 100 V 180$/);
+assert.match(secondBranch[0], /^M 300 100 V 124 H 500 V 180$/, 'Siblings use one horizontal bus beneath their parent');
+assert.equal(treeEdgePath({ sourceX: 100, sourceY: 180, targetX: 300, targetY: 100 }, 'top')[0], 'M 100 180 V 156 H 300 V 100');
+assert.equal(treeEdgePath({ sourceX: 300, sourceY: 100, targetX: 100, targetY: 180 }, 'left')[0], 'M 300 100 H 276 V 180 H 100');
 
 const richCode = ts.transpileModule(await readFile('lib/rich-text.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { richTextHtml, formatWholeText } = await import(`data:text/javascript;base64,${Buffer.from(richCode).toString('base64')}`);

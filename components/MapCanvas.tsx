@@ -143,17 +143,18 @@ function InnerCanvas({ map, previewNodes, resizingGroup = false, onResizeStart, 
       && !(n.parentId === root?.id && (stages.length >= 2 || map.layout === 'fishbone' || map.layout === 'timeline'))).map(n => {
     const parent = byId.get(n.parentId!)!; const target = byId.get(n.id)!;
     const edgeLayout = parent.branchLayout || map.layout;
-    const horizontalTree = edgeLayout === 'horizontal' && target.x >= parent.x + visualSize(parent).width;
+    const treeLayout = ['horizontal', 'right', 'left', 'balanced', 'bilateral', 'vertical', 'down', 'up', 'org', 'org-left', 'flowchart', 'split-down'].includes(edgeLayout);
+    const direction = treeLayout ? branchDirection(parent, [target], edgeLayout) : null;
     const singleUnderlinedChild = target.shape === 'underline' && directCounts.get(parent.id) === 1;
     const underlinedSide = singleUnderlinedChild && target.x >= parent.x + visualSize(parent).width ? 'right'
       : singleUnderlinedChild && target.x + visualSize(target).width <= parent.x ? 'left' : null;
     const { sourceHandle, targetHandle } = underlinedSide
       ? { sourceHandle: `source-${underlinedSide}`, targetHandle: underlinedSide === 'right' ? 'target-left' : 'target-right' }
-      : horizontalTree
-      ? { sourceHandle: 'source-right', targetHandle: 'target-left' }
-      : (edgeLayout === 'vertical' || edgeLayout === 'flowchart') && target.y > parent.y
-        ? { sourceHandle: 'source-bottom', targetHandle: 'target-top' }
-        : alignedHandles(parent, target);
+      : direction === 'right' ? { sourceHandle: 'source-right', targetHandle: 'target-left' }
+      : direction === 'left' ? { sourceHandle: 'source-left', targetHandle: 'target-right' }
+      : direction === 'bottom' ? { sourceHandle: 'source-bottom', targetHandle: 'target-top' }
+      : direction === 'top' ? { sourceHandle: 'source-top', targetHandle: 'target-bottom' }
+      : alignedHandles(parent, target);
     const line = n.connectionStyle;
     const underline = target.shape === 'underline' || parent.shape === 'underline';
     const underlineColor = target.shape === 'underline' ? target.border : parent.shape === 'underline' ? parent.border : undefined;
@@ -161,7 +162,7 @@ function InnerCanvas({ map, previewNodes, resizingGroup = false, onResizeStart, 
     const edgeLine = { ...line, color, width: line?.width ?? (underline ? target.borderWidth ?? parent.borderWidth ?? 2 : 2), pattern: line?.pattern ?? (target.shape === 'underline' ? target.borderStyle : undefined) };
     const label = map.layout === 'flowchart' && parent.flowDecision ? n.flowAnswer === 'yes' ? 'Sim' : n.flowAnswer === 'no' ? 'Não' : undefined
       : map.layout === 'concept' ? n.conceptRelation || 'relaciona-se' : undefined;
-    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: edgeLine, route: underlinedSide ? 'inline-underline' as const : horizontalTree ? 'horizontal-tree' as const : undefined }, animated: false, style: { stroke: color, strokeWidth: edgeLine.width, strokeDasharray: edgeDash(edgeLine) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'none', color) };
+    return { id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id, sourceHandle, targetHandle, type: 'styled', label, data: { line: edgeLine, route: underlinedSide ? 'inline-underline' as const : direction === 'left' || direction === 'right' ? 'horizontal-tree' as const : direction === 'top' || direction === 'bottom' ? 'vertical-tree' as const : undefined }, animated: false, style: { stroke: color, strokeWidth: edgeLine.width, strokeDasharray: edgeDash(edgeLine) }, markerStart: edgeMarker(line?.start ?? 'none', color), markerEnd: edgeMarker(line?.end ?? 'none', color) };
     });
     const cycle = stages.length < 2 ? [] : stages.map((stage, index) => {
       const target = stages[(index + 1) % stages.length];

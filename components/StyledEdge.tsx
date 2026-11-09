@@ -1,6 +1,7 @@
 'use client';
 import { BaseEdge, getBezierPath, getSmoothStepPath, getStraightPath, Position, type EdgeProps } from '@xyflow/react';
 import type { LineStyle } from '../types';
+import { treeEdgePath } from '../lib/tree-edge';
 
 function Endpoint({ symbol, x, y, color, width, position }: { symbol?: LineStyle['end']; x: number; y: number; color: string; width: number; position: Position }) {
   const size = Math.max(5, width + 3);
@@ -11,14 +12,15 @@ function Endpoint({ symbol, x, y, color, width, position }: { symbol?: LineStyle
   return null;
 }
 
-export default function StyledEdge(props: EdgeProps & { data?: { line?: LineStyle; route?: 'horizontal-tree' | 'inline-underline' } }) {
+export default function StyledEdge(props: EdgeProps & { data?: { line?: LineStyle; route?: 'horizontal-tree' | 'vertical-tree' | 'inline-underline' } }) {
   const line = props.data?.line;
   const points = { sourceX: props.sourceX, sourceY: props.sourceY, targetX: props.targetX, targetY: props.targetY, sourcePosition: props.sourcePosition, targetPosition: props.targetPosition };
-  const trunkX = props.sourceX + 24;
   const [path, labelX, labelY] = props.data?.route === 'inline-underline' && Math.abs(props.sourceY - props.targetY) <= 2
     ? [`M ${props.sourceX} ${props.sourceY} H ${props.targetX}`, (props.sourceX + props.targetX) / 2, props.sourceY]
     : props.data?.route === 'horizontal-tree'
-    ? [`M ${props.sourceX} ${props.sourceY} H ${trunkX} V ${props.targetY} H ${props.targetX}`, (trunkX + props.targetX) / 2, props.targetY]
+    ? treeEdgePath(points, props.sourcePosition === Position.Left ? 'left' : 'right')
+    : props.data?.route === 'vertical-tree'
+    ? treeEdgePath(points, props.sourcePosition === Position.Top ? 'top' : 'bottom')
     : line?.curve === 'straight' ? getStraightPath(points) : line?.curve === 'smooth' ? getBezierPath(points) : getSmoothStepPath({ ...points, borderRadius: line?.curve === 'step' ? 0 : 12 });
   const color = line?.color || '#b9b4db';
   const width = line?.width ?? 2;
