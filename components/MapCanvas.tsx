@@ -9,7 +9,7 @@ import type { LineStyle, MindMap, MindNode, TagDefinition } from '../types';
 import { branchCounts, branchDirection, descendants, layoutMap, layoutSize, matrixGeometry, packTreeLayout, swimlaneGeometry, treemapRects, visibleNodes } from '../lib/maps';
 import { createBoundaryGeometry } from '../lib/boundary-geometry';
 import type { BoundarySelection } from '../lib/boundaries';
-import { collectNodeDimensions, effectiveAvoidOverlap, movementModes, projectDrag, reparentBranch, reorderAlignedSibling, reorganizeBranch, snapMoveAwayFromOverlap, visualSize } from '../lib/movement';
+import { collectNodeDimensions, effectiveAvoidOverlap, movementModes, projectDrag, reparentBranches, reorderAlignedSibling, reorganizeBranch, snapMoveAwayFromOverlap, visualSize } from '../lib/movement';
 import { alignedHandles } from '../lib/edge-geometry';
 import { applySiblingAlignments } from '../lib/visual-standardization';
 import type { VisualOperation, VisualScope, VisualStyleGroup } from '../lib/visual-standardization';
@@ -31,8 +31,8 @@ function InnerCanvas({ map, previewNodes, resizingGroup = false, onResizeStart, 
   const dropCleanup = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearDropTarget = useCallback(() => { dropTarget.current?.element.classList.remove('reparent-drop-target'); dropTarget.current = null; }, []);
   useEffect(() => () => { if (dropCleanup.current) clearTimeout(dropCleanup.current); clearDropTarget(); }, [clearDropTarget]);
-  const inspectDropTarget = useCallback((clientX: number, clientY: number, sourceId: string) => {
-    const forbidden = descendants(map.nodes, sourceId);
+  const inspectDropTarget = useCallback((clientX: number, clientY: number, sourceIds: string[]) => {
+    const forbidden = new Set(sourceIds.flatMap(id => [...descendants(map.nodes, id)]));
     const candidate = document.elementsFromPoint(clientX, clientY).map(element => element.closest<HTMLElement>('.react-flow__node[data-id]'))
       .find(element => element?.dataset.id && !forbidden.has(element.dataset.id) && map.nodes.some(node => node.id === element.dataset.id && !node.floating));
     if (candidate?.dataset.id === dropTarget.current?.id) return;
@@ -314,22 +314,27 @@ function InnerCanvas({ map, previewNodes, resizingGroup = false, onResizeStart, 
     if (projected.blocked) onMoveNotice?.(projected.blocked);
     else if (projected.positions.size) {
       let next: MindMap = { ...map, nodes: map.nodes.map(node => { const position = projected.positions.get(node.id); return position ? { ...node, x: position.x, y: position.y } : node; }) };
-      const sourceId = requested.size === 1 ? [...requested.keys()][0] : null;
+      const draggedIds = [...requested.keys()];
+      const selectedDrag = selectionRef.current.length > 1 && draggedIds.some(id => selectionRef.current.includes(id));
+      const sourceIds = selectedDrag ? selectionRef.current : draggedIds;
       const targetId = dropTarget.current?.id;
-      if (sourceId && targetId) {
-        const original = map.nodes.find(node => node.id === sourceId)!;
-        const dropped = next.nodes.find(node => node.id === sourceId)!;
-        const branch = descendants(map.nodes, sourceId);
-        // An individual drag normally leaves descendants behind. Reparenting is
-        // a branch operation, so bring them along before placing the new branch.
-        next = { ...next, nodes: next.nodes.map(node => branch.has(node.id) && !projected.positions.has(node.id)
-          ? { ...node, x: node.x + dropped.x - original.x, y: node.y + dropped.y - original.y } : node) };
-        const result = reparentBranch(next, sourceId, targetId);
+      if (sourceIds.length && targetId) {
+        // Individual movement can leave descendants behind; a hierarchy change
+        // moves each selected branch as a whole, including those descendants.
+        const offsets = new Map<string, { x: number; y: number }>();
+        const selectedBranches = new Map(sourceIds.map(id => [id, descendants(map.nodes, id)]));
+        for (const id of sourceIds.filter(candidate => !sourceIds.some(other => other !== candidate && selectedBranches.get(other)?.has(candidate)))) {
+          const original = map.nodes.find(node => node.id === id);
+          const dropped = next.nodes.find(node => node.id === id);
+          if (original && dropped) for (const branchId of selectedBranches.get(id) || []) if (!projected.positions.has(branchId)) offsets.set(branchId, { x: dropped.x - original.x, y: dropped.y - original.y });
+        }
+        next = { ...next, nodes: next.nodes.map(node => { const shift = offsets.get(node.id); return shift ? { ...node, x: node.x + shift.x, y: node.y + shift.y } : node; }) };
+        const result = reparentBranches(next, sourceIds, targetId);
         if (result.changed) {
           onChange(applySiblingAlignments(result.map));
-          onMoveNotice?.('Ramo movido para o novo nível. Use Desfazer para recuperar a hierarquia anterior.');
+          onMoveNotice?.(sourceIds.length > 1 ? 'Nós selecionados movidos para o novo nível. Use Desfazer para recuperar a hierarquia anterior.' : 'Ramo movido para o novo nível. Use Desfazer para recuperar a hierarquia anterior.');
           clearDropTarget(); dragPositions.current = new Map(); automaticPreview.current.clear(); setLivePositions(new Map());
-          if (temporaryBranchId === sourceId) onTemporaryBranchDone?.();
+          if (temporaryBranchId && sourceIds.includes(temporaryBranchId)) onTemporaryBranchDone?.();
           return;
         }
         if (result.reason) onMoveNotice?.(result.reason);
@@ -389,7 +394,7 @@ function InnerCanvas({ map, previewNodes, resizingGroup = false, onResizeStart, 
     onChange({ ...map, relationships: [...(map.relationships || []), { id: crypto.randomUUID(), source: state.fromNode.id, target: targetId, sourceHandle, targetHandle, label: map.layout === 'concept' ? 'relaciona-se' : undefined }] });
   }, [map, onChange, readOnly]);
   return <div className="canvas-surface" onKeyDown={e => { const target = e.target as HTMLElement; if (e.code === 'Space' && !target.closest('input,textarea,select,[contenteditable="true"]')) { setSpaceHeld(true); e.preventDefault(); } }} onKeyUp={e => { if (e.code === 'Space') setSpaceHeld(false); }} onBlur={() => setSpaceHeld(false)} tabIndex={0}>
-    <ReactFlow proOptions={{ hideAttribution: true }} autoPanOnNodeFocus={false} autoPanOnNodeDrag={false} panActivationKeyCode={null} nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onNodeDragStart={() => { if (dropCleanup.current) clearTimeout(dropCleanup.current); clearDropTarget(); }} onNodeDrag={(event, node) => { const pointer = 'changedTouches' in event ? event.changedTouches[0] : event; if (dragPositions.current.size <= 1 && pointer) inspectDropTarget(pointer.clientX, pointer.clientY, node.id); else clearDropTarget(); }} onNodeDragStop={(event, node) => { const pointer = 'changedTouches' in event ? event.changedTouches[0] : event; if (dragPositions.current.size && pointer) inspectDropTarget(pointer.clientX, pointer.clientY, node.id); dropCleanup.current = setTimeout(clearDropTarget, 150); }} onConnect={onConnect} onConnectEnd={onConnectEnd} onNodeClick={(event, node) => { setContextNodeId(null); if (!event.ctrlKey && !event.metaKey && !event.shiftKey) onSelect(node.id); }} onEdgeClick={(_event, edge) => { if (readOnly) return; if (map.relationships?.some(link => link.id === edge.id)) onSelectEdge?.(edge.id); else onSelect(edge.target); }} onNodeContextMenu={(event, node) => { if (readOnly) return; event.preventDefault(); setContextNodeId(node.id); onOpenQuick?.(node.id, 'movement'); }} onPaneClick={(event) => { if (event.ctrlKey || event.metaKey) return; setContextNodeId(null); onSelect(null); }} fitView fitViewOptions={{ padding: 0.3, maxZoom: 1 }} minZoom={0.18} maxZoom={2.5} panOnDrag={spaceHeld ? [0, 1, 2] : [1, 2]} zoomOnScroll zoomOnDoubleClick={false} selectionOnDrag={false} selectionKeyCode={readOnly ? null : ["Control", "Meta", "Shift"]} multiSelectionKeyCode={["Control", "Meta"]} selectionMode={SelectionMode.Partial} deleteKeyCode={null} nodeDragThreshold={3} nodesConnectable={!readOnly} connectionMode={ConnectionMode.Loose} nodesDraggable={!readOnly} elementsSelectable={!readOnly} connectionLineType={ConnectionLineType.SmoothStep}>
+    <ReactFlow proOptions={{ hideAttribution: true }} autoPanOnNodeFocus={false} autoPanOnNodeDrag={false} panActivationKeyCode={null} nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onNodeDragStart={() => { if (dropCleanup.current) clearTimeout(dropCleanup.current); clearDropTarget(); }} onNodeDrag={(event, node) => { const pointer = 'changedTouches' in event ? event.changedTouches[0] : event; if (pointer) inspectDropTarget(pointer.clientX, pointer.clientY, selectionRef.current.length > 1 && selectionRef.current.includes(node.id) ? selectionRef.current : [node.id]); }} onNodeDragStop={(event, node) => { const pointer = 'changedTouches' in event ? event.changedTouches[0] : event; if (dragPositions.current.size && pointer) inspectDropTarget(pointer.clientX, pointer.clientY, selectionRef.current.length > 1 && selectionRef.current.includes(node.id) ? selectionRef.current : [node.id]); dropCleanup.current = setTimeout(clearDropTarget, 150); }} onConnect={onConnect} onConnectEnd={onConnectEnd} onNodeClick={(event, node) => { setContextNodeId(null); if (!event.ctrlKey && !event.metaKey && !event.shiftKey) onSelect(node.id); }} onEdgeClick={(_event, edge) => { if (readOnly) return; if (map.relationships?.some(link => link.id === edge.id)) onSelectEdge?.(edge.id); else onSelect(edge.target); }} onNodeContextMenu={(event, node) => { if (readOnly) return; event.preventDefault(); setContextNodeId(node.id); onOpenQuick?.(node.id, 'movement'); }} onPaneClick={(event) => { if (event.ctrlKey || event.metaKey) return; setContextNodeId(null); onSelect(null); }} fitView fitViewOptions={{ padding: 0.3, maxZoom: 1 }} minZoom={0.18} maxZoom={2.5} panOnDrag={spaceHeld ? [0, 1, 2] : [1, 2]} zoomOnScroll zoomOnDoubleClick={false} selectionOnDrag={false} selectionKeyCode={readOnly ? null : ["Control", "Meta", "Shift"]} multiSelectionKeyCode={["Control", "Meta"]} selectionMode={SelectionMode.Partial} deleteKeyCode={null} nodeDragThreshold={3} nodesConnectable={!readOnly} connectionMode={ConnectionMode.Loose} nodesDraggable={!readOnly} elementsSelectable={!readOnly} connectionLineType={ConnectionLineType.SmoothStep}>
       {grid && <Background variant={BackgroundVariant.Dots} gap={22} size={1.1} color="#dadde9" />}
       <ViewportPortal>{diagramBackdrop}{concentricRings.map(ring => <div key={`ring-${ring.depth}`} className="concentric-ring" style={{ left: ring.x, top: ring.y, width: ring.diameter, height: ring.diameter }}/>)}</ViewportPortal>
       <ViewportPortal>{annotations.map(({ id, kind, boundary, summary, tagIds, x, y, width, height, outline, rectangular, parts }) => {

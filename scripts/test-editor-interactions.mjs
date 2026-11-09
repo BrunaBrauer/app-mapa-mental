@@ -23,7 +23,7 @@ assert.match(canvas, /map\.siblingReorder !== false && requested\.size === 1/, '
 assert.match(movementSettings, /checked=\{map\.siblingReorder !== false\}/, 'The map must expose an aligned-reordering toggle');
 for (const side of ['left', 'right', 'top', 'bottom']) assert.match(nodeView, new RegExp(`type="target" id="target-${side}"`), `Tree edges need a registered ${side} target handle`);
 assert.match(nodeView, /node-underline-rule[\s\S]*?item\.connectionStyle\?\.width[\s\S]*?item\.connectionStyle\?\.pattern[\s\S]*?item\.connectionStyle\?\.color/, 'The underlined rule follows the incoming line width, pattern and color');
-assert.match(canvas, /reparentBranch\(next, sourceId, targetId\)/, 'Dropping one node over another updates the hierarchy');
+assert.match(canvas, /reparentBranches\(next, sourceIds, targetId\)/, 'Dropping selected nodes over another updates their hierarchy together');
 assert.match(canvas, /const edgeLayout = parent\.branchLayout \|\| map\.layout/, 'Connections follow the parent branch layout');
 assert.match(canvas, /horizontalTree[\s\S]*?sourceHandle: 'source-right', targetHandle: 'target-left'/, 'Horizontal tree edges start on the right when the child is actually to the right');
 assert.match(canvas, /edgeLayout === 'vertical' \|\| edgeLayout === 'flowchart'[\s\S]*?sourceHandle: 'source-bottom', targetHandle: 'target-top'/, 'Vertical tree edges start at the bottom');

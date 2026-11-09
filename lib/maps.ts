@@ -26,14 +26,9 @@ export function autoLayout(nodes: MindNode[], mode: LayoutMode, spacing = { x: 2
   const next = nodes.map(n => ({ ...n })); if (mode === 'free' || mode === 'network' || mode === 'treemap' || !next.length) return next;
   if (mode === 'concept') return autoLayout(next, 'radial', spacing);
   if (mode === 'horizontal') {
-    const placed = autoLayout(next, 'right', spacing);
-    const byId = new Map(placed.map(node => [node.id, node]));
-    const depth = (node: MindNode) => { let level = 0; let parent = node.parentId; const seen = new Set([node.id]); while (parent && byId.has(parent) && !seen.has(parent)) { seen.add(parent); level++; parent = byId.get(parent)!.parentId; } return level; };
-    const widths = new Map<number, number>();
-    for (const node of visibleNodes(placed).filter(node => !node.floating)) widths.set(depth(node), Math.max(widths.get(depth(node)) || 0, node.width ?? (node.parentId ? 145 : 182)));
-    const columns = new Map<number, number>([[0, 0]]);
-    for (let level = 1; level <= widths.size; level++) columns.set(level, (columns.get(level - 1) || 0) + (widths.get(level - 1) || 145) + 72);
-    return placed.map(node => node.floating ? node : { ...node, x: columns.get(depth(node)) ?? node.x });
+    // The packing pass positions each child relative to its own parent. A global
+    // depth column would inherit the widest node of an unrelated branch.
+    return autoLayout(next, 'right', spacing);
   }
   const flowchart = mode === 'flowchart';
   if (mode === 'vertical' || flowchart) mode = 'down';
@@ -292,16 +287,16 @@ type Bounds = { left: number; top: number; right: number; bottom: number };
 const treeLayouts: LayoutMode[] = ['horizontal', 'right', 'left', 'balanced', 'bilateral', 'vertical', 'down', 'up', 'org', 'org-left', 'flowchart', 'split-down'];
 export function layoutSize(node: MindNode): { width: number; height: number } {
   const declaredWidth = node.width ?? (node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 205 : node.shape === 'ellipse' ? 175 : !node.parentId && !node.floating ? 182 : 145);
-  const baseHeight = node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 118 : node.shape === 'ellipse' ? 74 : !node.parentId && !node.floating ? 38 : 32;
+  const baseHeight = node.shape === 'circle' ? 95 : node.shape === 'diamond' ? 118 : node.shape === 'ellipse' ? 74 : !node.parentId && !node.floating ? 34 : 28;
   const fontSize = Math.max(node.fontSize ?? (!node.parentId ? 18 : 14), ...(node.richText || []).map(run => run.fontSize ?? 0));
   const lineSpacing = Math.max(node.lineSpacing ?? 1.3, ...(node.richText || []).map(run => run.lineSpacing ?? 0));
-  const sidePadding = (node.paddingLeft ?? node.padding ?? 8) + (node.paddingRight ?? node.padding ?? 8);
+  const sidePadding = (node.paddingLeft ?? node.padding ?? 5) + (node.paddingRight ?? node.padding ?? 5);
   const attachmentWidth = (node.icon ? 24 : 0) + (node.notes ? node.notes.length ? 28 : 0 : node.note ? 20 : 0) + (node.comments?.length ? 28 : 0) + (node.tagIds?.length || 0) * 20 + (node.url ? 20 : 0) + (node.task ? 22 : 0);
   const naturalWidth = Math.max(...node.text.split(/\r?\n/).map(line => line.length * fontSize * .6)) + sidePadding + attachmentWidth + 4;
   const width = node.wrapText === false ? Math.max(declaredWidth, naturalWidth) : declaredWidth;
   const textWidth = Math.max(28, width - sidePadding - attachmentWidth - 4);
   const lineCount = node.text.split(/\r?\n/).reduce((sum, line) => sum + (node.wrapText === false ? 1 : Math.max(1, Math.ceil(line.length * fontSize * .6 / textWidth))), 0);
-  const textHeight = lineCount * fontSize * lineSpacing + (node.paddingTop ?? node.padding ?? 4) + (node.paddingBottom ?? node.padding ?? 4) + (node.borderWidth ?? 2) * 2;
+  const textHeight = lineCount * fontSize * lineSpacing + (node.paddingTop ?? node.padding ?? 3) + (node.paddingBottom ?? node.padding ?? 3) + (node.borderWidth ?? 2) * 2;
   const attachmentsHeight = attachmentWidth > width - sidePadding - 35 ? 22 : 0;
   const extraHeight = (node.label ? 18 : 0) + (node.equation ? 22 : 0) + (node.mediaUrl ? 20 : 0) + (node.image ? 127 : 0);
   return { width: Math.max(width, node.minWidth ?? 0), height: Math.max(node.height ?? 0, baseHeight, textHeight + attachmentsHeight + extraHeight, node.minHeight ?? 0) };
@@ -369,36 +364,33 @@ export function packTreeLayout(nodes: MindNode[], layout: LayoutMode, dimensions
     return found;
   };
   const gapFor = (side: BranchDirection) => side === 'right' || side === 'left'
-    ? Math.max(48, spacing.x - 188) : Math.max(48, spacing.y - 40);
-  // Size-based columns/rows can move both inward and outward. The later subtree
-  // packing pass resolves perpendicular collisions without widening every level.
+    ? Math.max(44, spacing.x - 206) : Math.max(44, spacing.y - 68);
+  // Place each set of siblings after its own parent. The connector controls fit
+  // inside the short gap; other branches never widen this branch's connection.
   for (const root of visible.filter(node => !node.parentId && !node.floating)) {
-    const lanes = new Map<BranchDirection, MindNode[][]>();
-    const pending = (children.get(root.id) || []).map(child => ({ parent: root, child, depth: 1, side: branchDirection(root, [child], layout) }));
+    const pending = [root];
     const seen = new Set<string>();
     while (pending.length) {
-      const { parent, child, depth, side } = pending.shift()!;
-      if (seen.has(child.id) || branchDirection(parent, [child], layout) !== side) continue;
-      seen.add(child.id);
-      const levels = lanes.get(side) || [];
-      (levels[depth] ||= []).push(child);
-      lanes.set(side, levels);
-      for (const next of children.get(child.id) || []) pending.push({ parent: child, child: next, depth: depth + 1, side });
-    }
-    for (const [side, levels] of lanes) {
-      const horizontal = side === 'right' || side === 'left';
-      let edge = side === 'right' ? root.x + size(root).width : side === 'left' ? root.x : side === 'bottom' ? root.y + size(root).height : root.y;
-      for (let depth = 1; depth < levels.length; depth++) {
-        const members = levels[depth] || [];
-        if (!members.length) continue;
-        const extent = Math.max(...members.map(node => horizontal ? size(node).width : size(node).height));
-        const gap = gapFor(side);
-        const coordinate = side === 'right' || side === 'bottom' ? edge + gap : edge - gap - extent;
-        for (const member of members) {
-          const delta = coordinate - (horizontal ? member.x : member.y);
-          move(subtree(member), horizontal ? delta : 0, horizontal ? 0 : delta);
+      const parent = pending.shift()!;
+      if (seen.has(parent.id)) continue;
+      seen.add(parent.id);
+      const groups = new Map<BranchDirection, MindNode[]>();
+      for (const child of children.get(parent.id) || []) {
+        const side = branchDirection(parent, [child], layout);
+        groups.set(side, [...(groups.get(side) || []), child]);
+        pending.push(child);
+      }
+      for (const [side, siblings] of groups) {
+        const extent = Math.max(...siblings.map(node => side === 'left' ? size(node).width : side === 'top' ? size(node).height : 0));
+        const coordinate = side === 'right' ? parent.x + size(parent).width + gapFor(side)
+          : side === 'left' ? parent.x - gapFor(side) - extent
+          : side === 'bottom' ? parent.y + size(parent).height + gapFor(side)
+          : parent.y - gapFor(side) - extent;
+        for (const child of siblings) {
+          const horizontal = side === 'right' || side === 'left';
+          const delta = coordinate - (horizontal ? child.x : child.y);
+          move(subtree(child), horizontal ? delta : 0, horizontal ? 0 : delta);
         }
-        edge = side === 'right' || side === 'bottom' ? coordinate + extent : coordinate;
       }
     }
   }

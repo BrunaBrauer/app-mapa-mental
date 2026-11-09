@@ -6,7 +6,7 @@ const compile = async path => ts.transpileModule(await readFile(path, 'utf8'), {
 const url = code => `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
 const movementUrl = url((await compile('lib/movement.ts')).replace("'./maps'", JSON.stringify(url(await compile('lib/maps.ts')))));
 const movement = await import(movementUrl);
-const { effectiveMovementMode, movementModes, childMovementSettings, projectDrag, reparentBranch, reorderAlignedSibling, reorganizeBranch, alignNodes, snapMoveAwayFromOverlap, overlappingIds, visualSize } = movement;
+const { effectiveMovementMode, movementModes, childMovementSettings, projectDrag, reparentBranch, reparentBranches, reorderAlignedSibling, reorganizeBranch, alignNodes, snapMoveAwayFromOverlap, overlappingIds, visualSize } = movement;
 const { alignedHandles } = await import(url((await compile('lib/edge-geometry.ts')).replace("'./movement'", JSON.stringify(movementUrl))));
 const nodes = [
   { id: 'root', parentId: null, text: 'Centro', x: 0, y: 0 },
@@ -41,12 +41,24 @@ assert.equal(reparented.map.nodes.find(node => node.id === 'other').parentId, 'r
 assert.equal(reparentBranch(map, 'branch', 'leaf').changed, false, 'A branch cannot become a descendant of itself');
 assert.equal(reparentBranch(map, 'root', 'other').changed, false, 'The central node cannot be reparented');
 assert.equal(reparentBranch(locked, 'branch', 'other').changed, false, 'A locked descendant prevents moving the branch');
+const groupMap = { ...map, nodes: [...nodes, { id: 'destination', parentId: 'root', text: 'Destino', x: 260, y: 380 }, { id: 'other-child', parentId: 'other', text: 'Interno', x: 520, y: 200 }] };
+const groupMoved = reparentBranches(groupMap, ['branch', 'leaf', 'other'], 'destination');
+assert.equal(groupMoved.changed, true);
+assert.equal(groupMoved.map.nodes.find(node => node.id === 'branch').parentId, 'destination');
+assert.equal(groupMoved.map.nodes.find(node => node.id === 'other').parentId, 'destination');
+assert.equal(groupMoved.map.nodes.find(node => node.id === 'leaf').parentId, 'branch', 'Selected descendants keep their original parent');
+assert.equal(groupMoved.map.nodes.find(node => node.id === 'other-child').parentId, 'other');
+assert.equal(reparentBranches(groupMap, ['branch', 'other'], 'leaf').changed, false, 'A target inside any selected branch is rejected atomically');
+assert.equal(reparentBranches({ ...groupMap, nodes: groupMap.nodes.map(node => node.id === 'other-child' ? { ...node, positionLocked: true } : node) }, ['branch', 'other'], 'destination').changed, false, 'A lock in one selected branch blocks the whole operation');
+const freeGroup = reparentBranches({ ...groupMap, layout: 'free' }, ['branch', 'other'], 'destination');
+assert.equal(freeGroup.changed, true);
+assert.equal(freeGroup.map.nodes.find(node => node.id === 'leaf').parentId, 'branch');
 const collapsedParent = reparentBranch({ ...map, nodes: nodes.map(node => node.id === 'other' ? { ...node, collapsed: true } : node) }, 'branch', 'other');
 assert.equal(collapsedParent.map.nodes.find(node => node.id === 'other').collapsed, false, 'The destination opens to reveal its new child');
 const freeReparent = reparentBranch({ ...map, layout: 'network' }, 'branch', 'other');
 const freeBranch = freeReparent.map.nodes.find(node => node.id === 'branch');
 const freeLeaf = freeReparent.map.nodes.find(node => node.id === 'leaf');
-assert.ok(freeBranch.x >= nodes[3].x + visualSize(nodes[3]).width + 72, 'Free layout places the new child beside its parent');
+assert.ok(freeBranch.x >= nodes[3].x + visualSize(nodes[3]).width + 54, 'Free layout places the new child beside its parent');
 assert.equal(freeLeaf.x - freeBranch.x, nodes[2].x - nodes[1].x, 'Free layout preserves descendant offsets');
 assert.equal(freeLeaf.y - freeBranch.y, nodes[2].y - nodes[1].y);
 assert.match(projectDrag(locked, requested, 'hierarchical').blocked, /bloqueada/);
@@ -65,7 +77,7 @@ const messy = { ...map, nodes: nodes.map(node => node.id === 'leaf' ? { ...node,
 const organized = reorganizeBranch(messy, 'branch', false);
 assert.equal(organized.nodes.find(node => node.id === 'root').x, 0);
 assert.equal(organized.nodes.find(node => node.id === 'other').y, 200);
-assert.equal(organized.nodes.find(node => node.id === 'leaf').x, organized.nodes.find(node => node.id === 'branch').x + visualSize(organized.nodes.find(node => node.id === 'branch')).width + 72);
+assert.equal(organized.nodes.find(node => node.id === 'leaf').x, organized.nodes.find(node => node.id === 'branch').x + visualSize(organized.nodes.find(node => node.id === 'branch')).width + 54);
 assert.equal(organized.nodes.find(node => node.id === 'leaf').y, 0);
 const lockedOrganized = reorganizeBranch({ ...messy, nodes: messy.nodes.map(node => node.id === 'leaf' ? { ...node, positionLocked: true } : node) }, 'branch', true);
 assert.equal(lockedOrganized.nodes.find(node => node.id === 'leaf').y, 400);
