@@ -23,7 +23,7 @@ const edgeDash = (style?: LineStyle) => style?.pattern === 'dashed' ? '8 5' : st
 function InnerCanvas({ map, previewNodes, resizingGroup = false, onResizeStart, onResizePreview, onResizeEnd, onResizeCancel, selectedId, selectedIds = selectedId ? [selectedId] : [], selectedBoundary, onSelectBoundary, globalMovementMode = 'hierarchical', globalAvoidOverlap = true, temporaryBranchId, onTemporaryBranchDone, onMoveNotice, onSelect, onSelectMany, onSelectEdge, onChange, onGeometryChange, onAdd, onEdit, onToggle, onAction, onOpenLinkedMaps, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, onTagToggle, onCreateTag, tags, fonts, onImportFont, onFavoriteIcons, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const viewport = useViewport();
-  const groupResizeDrag = useRef<{ x: number; y: number; zoom: number; dx: number; dy: number } | null>(null);
+  const groupResizeDrag = useRef<{ x: number; y: number; zoom: number; axis: 'width' | 'height' | null; dx: number; dy: number } | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
   const dragPositions = useRef(new Map<string, { x: number; y: number; dragging: boolean }>());
@@ -403,7 +403,27 @@ function InnerCanvas({ map, previewNodes, resizingGroup = false, onResizeStart, 
       })}</ViewportPortal>
       <Controls position="bottom-left" showInteractive={false}/>
     </ReactFlow>
-    {groupSelection && <><div className="group-selection-frame" aria-hidden="true" style={{ left: groupSelection.left - 5, top: groupSelection.top - 5, width: groupSelection.width + 10, height: groupSelection.height + 10 }}/><button type="button" className="group-selection-resize nodrag nopan" style={{ left: `clamp(12px, ${groupSelection.left + groupSelection.width + 5}px, calc(100% - 12px))`, top: `clamp(12px, ${groupSelection.top + groupSelection.height + 5}px, calc(100% - 12px))` }} disabled={!groupSelection.resizable} title={groupSelection.resizable ? 'Arraste para redimensionar os nós proporcionalmente' : 'Desbloqueie o tamanho de pelo menos um nó'} aria-label="Redimensionar nós selecionados proporcionalmente" onPointerDown={event => { if (!groupSelection.resizable) return; event.preventDefault(); event.stopPropagation(); groupResizeDrag.current = { x: event.clientX, y: event.clientY, zoom: viewport.zoom, dx: 0, dy: 0 }; event.currentTarget.setPointerCapture(event.pointerId); onResizeStart?.(); }} onPointerMove={event => { const drag = groupResizeDrag.current; if (!drag) return; drag.dx = Math.round((event.clientX - drag.x) / drag.zoom); drag.dy = Math.round((event.clientY - drag.y) / drag.zoom); onResizePreview?.(drag.dx, drag.dy); }} onPointerUp={() => stopGroupResize()} onPointerCancel={() => stopGroupResize(true)}><span aria-hidden="true">⤢</span></button></>}
+    {groupSelection && <>
+      <div className="group-selection-frame" aria-hidden="true" style={{ left: groupSelection.left - 5, top: groupSelection.top - 5, width: groupSelection.width + 10, height: groupSelection.height + 10 }}/>
+      <button type="button" className="group-selection-resize nodrag nopan"
+        style={{ left: `clamp(12px, ${groupSelection.left + groupSelection.width + 5}px, calc(100% - 12px))`, top: `clamp(12px, ${groupSelection.top + groupSelection.height + 5}px, calc(100% - 12px))` }}
+        disabled={!groupSelection.resizable}
+        title={groupSelection.resizable ? 'Arraste horizontalmente para igualar larguras ou verticalmente para igualar alturas' : 'Desbloqueie o tamanho de pelo menos um nó'}
+        aria-label="Redimensionar largura ou altura dos nós selecionados"
+        onPointerDown={event => { if (!groupSelection.resizable) return; event.preventDefault(); event.stopPropagation(); groupResizeDrag.current = { x: event.clientX, y: event.clientY, zoom: viewport.zoom, axis: null, dx: 0, dy: 0 }; event.currentTarget.setPointerCapture(event.pointerId); onResizeStart?.(); }}
+        onPointerMove={event => {
+          const drag = groupResizeDrag.current;
+          if (!drag) return;
+          const moveX = event.clientX - drag.x;
+          const moveY = event.clientY - drag.y;
+          if (!drag.axis && Math.max(Math.abs(moveX), Math.abs(moveY)) < 4) return;
+          if (!drag.axis) drag.axis = Math.abs(moveX) >= Math.abs(moveY) ? 'width' : 'height';
+          drag.dx = drag.axis === 'width' ? Math.round(moveX / drag.zoom) : 0;
+          drag.dy = drag.axis === 'height' ? Math.round(moveY / drag.zoom) : 0;
+          onResizePreview?.(drag.dx, drag.dy);
+        }}
+        onPointerUp={() => stopGroupResize()} onPointerCancel={() => stopGroupResize(true)}><span aria-hidden="true">⤢</span></button>
+    </>}
   </div>;
 }
 export default function MapCanvas(props: Props) { return <ReactFlowProvider key={props.map.id}><InnerCanvas {...props}/></ReactFlowProvider>; }
