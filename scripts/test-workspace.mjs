@@ -20,4 +20,7 @@ assert.equal(validWorkspace({ ...workspace, folders: [{ ...parent, parentId: chi
 assert.equal(validWorkspace({ ...workspace, files: [{ ...file, folderId: id(9) }] }), false, 'Orphan files are rejected');
 assert.deepEqual(normalizeWorkspace(null), emptyWorkspace());
 assert.deepEqual(normalizeWorkspace({ projects: [project] }).files, []);
+assert.deepEqual(normalizeWorkspace({ projects: [project] }).favoriteColors, ['#7057e8', '#41baa3'], 'Older workspaces receive default favorite colors');
+assert.equal(validWorkspace({ ...workspace, mapViews: { [`p:${project.id}`]: { mode: 'custom', order: [map.id] } }, favoriteColors: ['#a0a0a0', '#123456'] }), true);
+assert.equal(validWorkspace({ ...workspace, mapViews: { [`p:${project.id}`]: { mode: 'custom', order: [map.id, map.id] } } }), false, 'Duplicate custom order entries are rejected');
 console.log('Workspace: nested folders, cloud file metadata, tags, counts and validation OK.');

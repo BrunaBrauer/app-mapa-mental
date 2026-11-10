@@ -13,6 +13,8 @@ type Props = {
   nodes: MindNode[];
   fonts: ImportedFont[];
   favoriteIcons: string[];
+  favoriteColors?: [string, string];
+  onFavoriteColor?: (index: 0 | 1, color: string) => void;
   onPatch: (patch: Partial<MindNode>) => void;
   onImportFont: (file: File) => Promise<void>;
   onFavoriteIcons: (icons: string[]) => void;
@@ -23,7 +25,7 @@ type Props = {
   onClear: () => void;
 };
 
-export default function MultiNodeToolbar({ map, nodes, fonts, favoriteIcons, onPatch, onImportFont, onFavoriteIcons, onAlign, onVisual, onDelete, onBoundary, onClear }: Props) {
+export default function MultiNodeToolbar({ map, nodes, fonts, favoriteIcons, favoriteColors, onFavoriteColor, onPatch, onImportFont, onFavoriteIcons, onAlign, onVisual, onDelete, onBoundary, onClear }: Props) {
   const [panel, setPanel] = useState<'text' | 'node' | 'line' | 'arrange' | null>(null);
   const exemplar = nodes.at(-1)!;
   const lineExemplar = nodes.find(node => node.parentId);
@@ -39,8 +41,8 @@ export default function MultiNodeToolbar({ map, nodes, fonts, favoriteIcons, onP
       <span className="multi-selection-divider"/><button className="multi-danger" onClick={onDelete} title="Excluir nós selecionados"><Trash2 size={16}/></button><button onClick={onClear} title="Limpar seleção"><X size={17}/></button>
     </div>
     {panel && <div className="multi-selection-panel">{panel !== 'arrange' && <p className="multi-selection-hint">Os valores exibidos pertencem ao último nó selecionado. Cada alteração abaixo é aplicada a todos os nós selecionados.</p>}
-      {panel === 'text' && <QuickTextPanel node={exemplar} fonts={fonts} favorites={favoriteIcons} onPatch={onPatch} onImportFont={onImportFont} onFavorites={onFavoriteIcons} batch/>}
-      {panel === 'node' && <QuickNodePanel node={exemplar} onPatch={onPatch} batch/>}
+      {panel === 'text' && <QuickTextPanel node={exemplar} fonts={fonts} favorites={favoriteIcons} favoriteColors={favoriteColors} onFavoriteColor={onFavoriteColor} onPatch={onPatch} onImportFont={onImportFont} onFavorites={onFavoriteIcons} batch/>}
+      {panel === 'node' && <QuickNodePanel node={exemplar} favoriteColors={favoriteColors} onFavoriteColor={onFavoriteColor} onPatch={onPatch} batch/>}
       {panel === 'line' && lineExemplar && <QuickLinePanel node={lineExemplar} onPatch={onPatch} batch/>}
       {panel === 'arrange' && <><div className="multi-arrange"><strong>Alinhar e distribuir</strong><p>Nós bloqueados ficam no lugar. Cada comando pode ser desfeito.</p>{([
         ['left','Alinhar à esquerda'],['center-x','Centro horizontal'],['right','Alinhar à direita'],

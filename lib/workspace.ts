@@ -3,8 +3,10 @@ import type { MindMap, TagDefinition } from '../types';
 export type Project = { id: string; name: string; createdAt: number };
 export type Folder = { id: string; projectId: string; parentId: string | null; name: string; createdAt: number };
 export type WorkspaceFile = { id: string; projectId?: string; folderId?: string; name: string; mime: string; size: number; storagePath: string; createdAt: number };
-export type Workspace = { version: 1; projects: Project[]; folders: Folder[]; tags: TagDefinition[]; files: WorkspaceFile[] };
-export const emptyWorkspace = (): Workspace => ({ version: 1, projects: [], folders: [], tags: [], files: [] });
+export type MapSortMode = 'asc' | 'desc' | 'custom';
+export type MapView = { mode: MapSortMode; order: string[] };
+export type Workspace = { version: 1; projects: Project[]; folders: Folder[]; tags: TagDefinition[]; files: WorkspaceFile[]; mapViews?: Record<string, MapView>; favoriteColors?: [string, string] };
+export const emptyWorkspace = (): Workspace => ({ version: 1, projects: [], folders: [], tags: [], files: [], mapViews: {}, favoriteColors: ['#7057e8', '#41baa3'] });
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const title = (value: unknown) => typeof value === 'string' && value.trim().length > 0 && value.length <= 100;
@@ -12,12 +14,14 @@ const date = (value: unknown) => typeof value === 'number' && Number.isSafeInteg
 
 export function normalizeWorkspace(value: unknown): Workspace {
   if (!record(value)) return emptyWorkspace();
-  return { version: 1, projects: Array.isArray(value.projects) ? value.projects as Project[] : [], folders: Array.isArray(value.folders) ? value.folders as Folder[] : [], tags: Array.isArray(value.tags) ? value.tags as TagDefinition[] : [], files: Array.isArray(value.files) ? value.files as WorkspaceFile[] : [] };
+  return { version: 1, projects: Array.isArray(value.projects) ? value.projects as Project[] : [], folders: Array.isArray(value.folders) ? value.folders as Folder[] : [], tags: Array.isArray(value.tags) ? value.tags as TagDefinition[] : [], files: Array.isArray(value.files) ? value.files as WorkspaceFile[] : [], mapViews: record(value.mapViews) ? value.mapViews as Record<string, MapView> : {}, favoriteColors: Array.isArray(value.favoriteColors) ? value.favoriteColors as [string, string] : ['#7057e8', '#41baa3'] };
 }
 
 export function validWorkspace(value: unknown): value is Workspace {
   if (!record(value) || value.version !== 1 || !Array.isArray(value.projects) || !Array.isArray(value.folders) || !Array.isArray(value.tags) || !Array.isArray(value.files)) return false;
   if (value.projects.length > 100 || value.folders.length > 1000 || value.tags.length > 200 || value.files.length > 2000) return false;
+  if (value.favoriteColors !== undefined && (!Array.isArray(value.favoriteColors) || value.favoriteColors.length !== 2 || !value.favoriteColors.every(color => typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)))) return false;
+  if (value.mapViews !== undefined && (!record(value.mapViews) || Object.keys(value.mapViews).length > 1200 || !Object.entries(value.mapViews).every(([key, view]) => /^(unfiled|p:[0-9a-f-]{36}|f:[0-9a-f-]{36})$/i.test(key) && record(view) && ['asc', 'desc', 'custom'].includes(String(view.mode)) && Array.isArray(view.order) && view.order.length <= 2000 && view.order.every(id => typeof id === 'string' && uuid.test(id)) && new Set(view.order).size === view.order.length))) return false;
   if (!value.projects.every(project => record(project) && typeof project.id === 'string' && uuid.test(project.id) && title(project.name) && date(project.createdAt))) return false;
   if (!value.folders.every(folder => record(folder) && typeof folder.id === 'string' && uuid.test(folder.id) && typeof folder.projectId === 'string' && uuid.test(folder.projectId) && (folder.parentId === null || typeof folder.parentId === 'string' && uuid.test(folder.parentId)) && title(folder.name) && date(folder.createdAt))) return false;
   if (!value.tags.every(tag => record(tag) && typeof tag.id === 'string' && uuid.test(tag.id) && title(tag.name) && typeof tag.color === 'string' && /^#[0-9a-f]{6}$/i.test(tag.color))) return false;

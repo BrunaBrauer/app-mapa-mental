@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
+
+const source = await readFile('lib/workspace-order.ts', 'utf8');
+const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { mapSortMode, moveScopeMap, setScopeSort, sortScopeMaps } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const maps = [{ id: id(1), title: 'Zebra' }, { id: id(2), title: 'Árvore' }, { id: id(3), title: 'Método' }];
+const names = (workspace, projectId = null) => sortScopeMaps(workspace, maps, projectId, null).map(map => map.title);
+const initial = { mapViews: {} };
+assert.deepEqual(names(initial), ['Árvore', 'Método', 'Zebra']);
+const descending = setScopeSort(initial, maps, null, null, 'desc');
+assert.deepEqual(names(descending), ['Zebra', 'Método', 'Árvore']);
+const custom = setScopeSort(descending, maps, null, null, 'custom');
+assert.deepEqual(names(custom), ['Zebra', 'Método', 'Árvore']);
+const moved = moveScopeMap(custom, maps, null, null, id(3), id(1));
+assert.deepEqual(names(moved), ['Método', 'Zebra', 'Árvore']);
+assert.deepEqual(names(moved, id(9)), ['Árvore', 'Método', 'Zebra'], 'Each project or folder has its own order');
+assert.equal(mapSortMode(moved), 'custom');
+assert.equal(moveScopeMap(moved, maps, null, null, id(8), id(1)), moved, 'Unknown map cannot be inserted');
+assert.equal(moveScopeMap(descending, maps, null, null, id(3), id(1)), descending, 'Drag order only applies in custom mode');
+console.log('Workspace map sorting: ascending, descending, custom drag order, and scope isolation OK.');
