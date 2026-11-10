@@ -15,6 +15,7 @@ type Props = { node: MindNode; fonts: ImportedFont[]; favorites: string[]; onPat
 
 export default function QuickTextPanel({ node, fonts, favorites, onPatch, onImportFont, onFavorites, batch = false, inlineEditor }: Props) {
   const upload = useRef<HTMLInputElement>(null);
+  const skipFontCommit = useRef(false);
   const textColorInput = useRef<HTMLInputElement>(null);
   const editor = useRef<RichTextEditorHandle>(null);
   const activeEditor = () => inlineEditor?.current ?? editor.current;
@@ -25,10 +26,13 @@ export default function QuickTextPanel({ node, fonts, favorites, onPatch, onImpo
   const [textColorDraft, setTextColorDraft] = useState<string | null>(null);
   const [textColorPreview, setTextColorPreview] = useState<string | null>(null);
   const [highlight, setHighlight] = useState('#ffff00');
+  const [fontSizeEdit, setFontSizeEdit] = useState<{ nodeId: string; base: number; value: string } | null>(null);
   const [search, setSearch] = useState('');
   const [custom, setCustom] = useState('');
   const color = node.color && hex.test(node.color) ? node.color : '#000000';
   const fontSize = node.fontSize || (!node.parentId && !node.floating ? 18 : 14);
+  const fontSizeDraft = fontSizeEdit?.nodeId === node.id && fontSizeEdit.base === fontSize ? fontSizeEdit.value : null;
+  const setFontSizeDraft = (value: string | null) => setFontSizeEdit(value === null ? null : { nodeId: node.id, base: fontSize, value });
   const shownColor = textColorPreview ?? color;
   const available = [...new Set([...favorites, ...symbols])].filter(value => value.includes(search));
   const patchWhole = (nodePatch: Partial<MindNode>, runPatch: Parameters<typeof formatWholeText>[2]) => {
@@ -51,6 +55,18 @@ export default function QuickTextPanel({ node, fonts, favorites, onPatch, onImpo
       if (selectedValue !== undefined && activeEditor()?.paintSelection(String(selectedValue), name)) return;
     }
     patchWhole({ [name]: value }, { [name]: value });
+  };
+  const setFontSize = (value: number) => {
+    const next = Math.max(8, Math.min(96, Math.round(value)));
+    setFontSizeDraft(String(next));
+    applyMetric('fontSize', next);
+  };
+  const commitFontSize = () => {
+    const raw = fontSizeDraft?.trim();
+    if (raw === undefined) return;
+    const next = Number(raw);
+    if (raw && Number.isFinite(next)) setFontSize(next);
+    else setFontSizeDraft(null);
   };
   const applyCase = (value: NonNullable<MindNode['textTransform']>) => {
     if (!batch && activeEditor()?.hasSelection() && activeEditor()?.paintSelection(value, 'textTransform')) return;
@@ -81,7 +97,7 @@ export default function QuickTextPanel({ node, fonts, favorites, onPatch, onImpo
   return <div className="quick-style quick-text-panel">
     <div className="text-panel-top">
       <div className="text-font-control"><label className="quick-field">Fonte<select value={node.fontFamily || ''} onChange={event => applyMetric('fontFamily', event.target.value || undefined)}><option value="">Segoe UI (padrão)</option>{fontOptions.map(([name, family]) => <option key={name} value={family}>{name}</option>)}{fonts.map(font => <option key={font.id} value={font.family}>{font.name}</option>)}</select></label><button className="font-upload-shortcut" aria-label="Importar fonte" title="Importar fonte" disabled={importing} onClick={() => upload.current?.click()}><Upload size={19}/></button></div>
-      <div className="quick-field"><span>Tamanho</span><div className="text-size-stepper"><button aria-label="Diminuir tamanho" onClick={() => applyMetric('fontSize', Math.max(8, metricValue('fontSize', fontSize) - 1))}><Minus size={14}/></button><input type="number" min="8" max="96" aria-label="Tamanho da fonte" value={fontSize} onChange={event => applyMetric('fontSize', Math.max(8, Math.min(96, Number(event.target.value) || 8)))}/><button aria-label="Aumentar tamanho" onClick={() => applyMetric('fontSize', Math.min(96, metricValue('fontSize', fontSize) + 1))}><Plus size={14}/></button></div></div>
+      <div className="quick-field"><span>Tamanho</span><div className="text-size-stepper"><button type="button" aria-label="Diminuir tamanho" onMouseDown={event => event.preventDefault()} onClick={() => setFontSize((fontSizeDraft !== null && Number(fontSizeDraft) >= 8 ? Number(fontSizeDraft) : metricValue('fontSize', fontSize)) - 1)}><Minus size={14}/></button><input type="number" min="8" max="96" aria-label="Tamanho da fonte" value={fontSizeDraft ?? fontSize} onChange={event => setFontSizeDraft(event.target.value)} onBlur={() => { if (skipFontCommit.current) skipFontCommit.current = false; else commitFontSize(); }} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') { skipFontCommit.current = true; setFontSizeDraft(null); event.currentTarget.blur(); } }}/><button type="button" aria-label="Aumentar tamanho" onMouseDown={event => event.preventDefault()} onClick={() => setFontSize((fontSizeDraft !== null && Number(fontSizeDraft) >= 8 ? Number(fontSizeDraft) : metricValue('fontSize', fontSize)) + 1)}><Plus size={14}/></button></div></div>
     </div>
     <div className="text-panel-label">Cor da letra</div>
     <div className="text-color-row"><span className="text-color-icon" style={{ borderBottomColor: shownColor }}>A</span><label className="text-color-picker" style={{ background: shownColor }}><Plus size={14}/><input ref={textColorInput} type="color" aria-label="Personalizar cor da letra" value={shownColor} onInput={event => paintText(event.currentTarget.value)}/></label><input className="text-hex" aria-label="Código hexadecimal da cor da letra" maxLength={7} value={textColorDraft ?? shownColor} onChange={event => { setTextColorDraft(event.target.value); if (hex.test(event.target.value)) paintText(event.target.value); }} onBlur={() => setTextColorDraft(null)}/><button className="text-pipette" aria-label="Abrir seletor de cor" title="Abrir seletor de cor" onClick={() => textColorInput.current?.click()}><Pipette size={16}/></button>{textColors.map(value => <button key={value} className="text-color-swatch" aria-label={`Cor da letra ${value}`} title={value} style={{ background: value }} onClick={() => paintText(value)}/>)}</div>
