@@ -13,6 +13,31 @@ export function formatWholeText(text: string, runs: RichRun[] | undefined, patch
   return (runs?.length ? runs : [{ text }]).map(run => ({ ...run, ...patch }));
 }
 
+// Replace only the reviewed phrase, keeping all marks outside it and the marks at its start.
+export function replaceRichTextPhrase(text: string, runs: RichRun[] | undefined, original: string, replacement: string): { text: string; runs: RichRun[] } | null {
+  if (!original || !replacement || original === replacement) return null;
+  const start = text.indexOf(original);
+  if (start < 0 || text.indexOf(original, start + original.length) >= 0) return null;
+  const end = start + original.length;
+  const source = runs?.length && runs.map(run => run.text).join('') === text ? runs : [{ text }];
+  const next: RichRun[] = [];
+  let offset = 0;
+  let inserted = false;
+  for (const run of source) {
+    const runEnd = offset + run.text.length;
+    if (runEnd <= start || offset >= end) next.push({ ...run });
+    else {
+      const before = run.text.slice(0, Math.max(0, start - offset));
+      const after = run.text.slice(Math.max(0, end - offset));
+      if (before) next.push({ ...run, text: before });
+      if (!inserted) { next.push({ ...run, text: replacement }); inserted = true; }
+      if (after) next.push({ ...run, text: after });
+    }
+    offset = runEnd;
+  }
+  return { text: text.slice(0, start) + replacement + text.slice(end), runs: next };
+}
+
 export function richTextHtml(text: string, runs?: RichRun[]) {
   return (runs?.length ? runs : [{ text }]).map(run => {
     const styles: string[] = [];

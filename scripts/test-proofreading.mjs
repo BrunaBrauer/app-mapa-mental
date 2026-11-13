@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
+
+const source = await readFile('lib/proofreading.ts', 'utf8');
+const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { normalizeProofIssues } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const text = 'A equipe estão pronta.';
+assert.deepEqual(normalizeProofIssues([{ original: 'estão', suggestions: ['está', 'encontra-se'], reason: 'Concordância verbal.', kind: 'grammar' }], text), [{ original: 'estão', suggestions: ['está', 'encontra-se'], reason: 'Concordância verbal.', kind: 'grammar' }]);
+assert.deepEqual(normalizeProofIssues([{ original: 'não existe', suggestions: ['existe'], kind: 'orthography' }], text), []);
+assert.deepEqual(normalizeProofIssues([{ original: 'erro', suggestions: ['certo'], kind: 'orthography' }], 'erro e erro'), []);
+const editor = await readFile('components/Editor.tsx', 'utf8');
+const canvas = await readFile('components/MapCanvas.tsx', 'utf8');
+const richEditor = await readFile('components/RichTextEditor.tsx', 'utf8');
+assert.match(editor, /editNewNode\(child\.id\)/, 'New children request inline editing');
+assert.match(canvas, /editRequestKey: editRequest\?\.id === item\.id/, 'Edit request reaches the new node');
+assert.match(richEditor, /selectNodeContents\(editor\.current\)/, 'Placeholder is selected for immediate replacement');
+assert.match(richEditor, /contentEditable spellCheck lang=\{language\}/, 'Native spellcheck follows the node language');
+assert.match(richEditor, /setTimeout\(\(\) => \{ void reviewText\(false\); \}, delay\)/, 'Grammar review waits for a pause in typing');
+assert.match(richEditor, /Math\.max\(4000, 10_500 -/, 'Automatic review respects the request cooldown');
+console.log('Proofreading: suggestions validated, rich formatting retained, and new-node focus wired.');

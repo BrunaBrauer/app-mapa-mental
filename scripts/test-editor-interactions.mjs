@@ -39,7 +39,7 @@ assert.equal(treeEdgePath({ sourceX: 100, sourceY: 180, targetX: 300, targetY: 1
 assert.equal(treeEdgePath({ sourceX: 300, sourceY: 100, targetX: 100, targetY: 180 }, 'left')[0], 'M 300 100 H 276 V 180 H 100');
 
 const richCode = ts.transpileModule(await readFile('lib/rich-text.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { richTextHtml, formatWholeText } = await import(`data:text/javascript;base64,${Buffer.from(richCode).toString('base64')}`);
+const { richTextHtml, formatWholeText, replaceRichTextPhrase } = await import(`data:text/javascript;base64,${Buffer.from(richCode).toString('base64')}`);
 const colored = richTextHtml('texto', [{ text: 'texto', color: '#123456', highlight: '#ffff00', bold: true }]);
 assert.match(colored, /<span style="background-color:#ffff00;color:#123456"><strong>texto<\/strong><\/span>/);
 const partial = [{ text: 'uma ', italic: true }, { text: 'palavra', bold: true }];
@@ -47,6 +47,9 @@ assert.deepEqual(formatWholeText('uma palavra', partial, { highlight: '#ffcc00' 
   { text: 'uma ', italic: true, highlight: '#ffcc00' },
   { text: 'palavra', bold: true, highlight: '#ffcc00' },
 ], 'Whole-text formatting preserves other partial styles');
+assert.deepEqual(replaceRichTextPhrase('uma palavra', partial, 'palavra', 'frase'), { text: 'uma frase', runs: [{ text: 'uma ', italic: true }, { text: 'frase', bold: true }] }, 'Proofreading preserves partial formatting');
+assert.deepEqual(replaceRichTextPhrase('um teste bom', [{ text: 'um ', italic: true }, { text: 'teste', bold: true }, { text: ' bom', underline: true }], 'teste bom', 'exemplo'), { text: 'um exemplo', runs: [{ text: 'um ', italic: true }, { text: 'exemplo', bold: true }] }, 'A correction spanning runs keeps the first mark and preceding marks');
+assert.equal(replaceRichTextPhrase('erro erro', undefined, 'erro', 'certo'), null, 'Ambiguous repeated text is never changed automatically');
 assert.match(richTextHtml('x', [{ text: 'x', fontSize: 20, fontFamily: 'Georgia, serif', lineSpacing: 1.5, letterSpacing: 0.4 }]), /font-size:20px;font-family:Georgia, serif;line-height:1.5;letter-spacing:0.4px/);
 assert.doesNotMatch(richTextHtml('x', [{ text: '<script>', color: 'red" onmouseover="evil' }]), /<script>|onmouseover/);
 

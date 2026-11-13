@@ -1,12 +1,14 @@
 'use client';
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Bold, Italic, Strikethrough, Underline } from 'lucide-react';
-import { readRichText, richTextHtml } from '../lib/rich-text';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Bold, Check, Italic, Languages, LoaderCircle, Strikethrough, Underline, X } from 'lucide-react';
+import { readRichText, replaceRichTextPhrase, richTextHtml } from '../lib/rich-text';
+import { normalizeProofIssues, type ProofIssue, type ProofLanguage } from '../lib/proofreading';
 import type { RichRun } from '../types';
 
 export type RichTextEditorHandle = { command: (name: string, value?: string) => void; insert: (value: string) => void; hasSelection: () => boolean; getSelectionMetric: (kind: 'fontSize' | 'lineSpacing' | 'letterSpacing') => number | null; paintSelection: (value: string, kind?: 'color' | 'highlight' | 'fontSize' | 'fontFamily' | 'lineSpacing' | 'letterSpacing' | 'textTransform') => boolean; replaceRuns: (next: RichRun[]) => void };
-type Props = { nodeId: string; text: string; runs?: RichRun[]; onChange: (text: string, runs: RichRun[]) => void; compact?: boolean; autoFocus?: boolean; hideControls?: boolean; onDone?: (relatedTarget: EventTarget | null) => void };
-const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ nodeId, text, runs, onChange, compact, autoFocus, hideControls, onDone }, ref) {
+type Props = { nodeId: string; text: string; runs?: RichRun[]; onChange: (text: string, runs: RichRun[]) => void; language?: ProofLanguage; onLanguageChange?: (language: ProofLanguage) => void; compact?: boolean; autoFocus?: boolean; selectAllOnFocus?: boolean; hideControls?: boolean; onDone?: (relatedTarget: EventTarget | null) => void };
+const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ nodeId, text, runs, onChange, language = 'pt-BR', onLanguageChange, compact, autoFocus, selectAllOnFocus, hideControls, onDone }, ref) {
   const editor = useRef<HTMLDivElement>(null);
   const [color, setColor] = useState('#ffff00');
   const selection = useRef<Range | null>(null);
@@ -14,6 +16,13 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichText
   const lastNode = useRef<string | null>(null);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSubmitted = useRef('');
+  const reviewController = useRef<AbortController | null>(null);
+  const lastReviewed = useRef('');
+  const lastReviewAttempt = useRef(0);
+  const [issues, setIssues] = useState<ProofIssue[]>([]);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewError, setReviewError] = useState('');
   useEffect(() => {
     if (!editor.current) return;
     const key = JSON.stringify({ text, runs });
@@ -21,8 +30,17 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichText
     lastNode.current = nodeId;
     lastSubmitted.current = key;
     editor.current.innerHTML = richTextHtml(text, runs);
-    if (autoFocus) editor.current.focus();
-  }, [nodeId, autoFocus, text, runs]);
+    if (autoFocus) {
+      editor.current.focus();
+      if (selectAllOnFocus) {
+        const range = document.createRange();
+        range.selectNodeContents(editor.current);
+        const current = window.getSelection();
+        current?.removeAllRanges(); current?.addRange(range);
+        selection.current = range.cloneRange();
+      }
+    }
+  }, [nodeId, autoFocus, selectAllOnFocus, text, runs]);
   const rememberSelection = () => {
     const current = window.getSelection();
     if (current?.rangeCount && editor.current?.contains(current.anchorNode)) {
@@ -147,6 +165,48 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichText
       }
     }
   };
+  const reviewText = useCallback(async (manual: boolean) => {
+    if (!editor.current) return;
+    const source = readRichText(editor.current).map(run => run.text).join('').trim();
+    if (!source || source.length > 1000 || !manual && (source.length < 12 || ['Nova ideia', 'Nova etapa', 'Ideia central', 'Ideia flutuante'].includes(source))) return;
+    if (process.env.NEXT_PUBLIC_STORAGE_MODE !== 'cloud') { if (manual) { setReviewError('A revisão gramatical por IA requer uma conta conectada. O corretor do navegador continua disponível.'); setReviewOpen(true); } return; }
+    const signature = `${language}:${source}`;
+    if (!manual && signature === lastReviewed.current) return;
+    reviewController.current?.abort();
+    const controller = new AbortController(); reviewController.current = controller;
+    lastReviewAttempt.current = Date.now();
+    setReviewBusy(true); setReviewError('');
+    try {
+      const response = await fetch('/api/proofread', { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: source, language }) });
+      const result = await response.json() as { issues?: unknown; error?: string };
+      if (!response.ok) throw new Error(result.error || 'Não foi possível revisar o texto.');
+      if (!editor.current || readRichText(editor.current).map(run => run.text).join('').trim() !== source) return;
+      const found = normalizeProofIssues(result.issues, source);
+      lastReviewed.current = signature; setIssues(found); setReviewOpen(manual || found.length > 0);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      if (manual) { setReviewError(error instanceof Error ? error.message : 'Não foi possível revisar o texto.'); setReviewOpen(true); }
+    } finally { if (reviewController.current === controller) { reviewController.current = null; setReviewBusy(false); } }
+  }, [language]);
+  useEffect(() => {
+    if (!compact || !autoFocus || text.trim().length < 12) return;
+    const delay = Math.max(4000, 10_500 - (Date.now() - lastReviewAttempt.current));
+    const timer = setTimeout(() => { void reviewText(false); }, delay);
+    return () => clearTimeout(timer);
+  }, [compact, autoFocus, text, language, reviewText]);
+  useEffect(() => () => reviewController.current?.abort(), []);
+  const applySuggestion = (issue: ProofIssue, replacement: string) => {
+    if (!editor.current) return;
+    const currentRuns = readRichText(editor.current);
+    const currentText = currentRuns.map(run => run.text).join('');
+    const next = replaceRichTextPhrase(currentText, currentRuns, issue.original, replacement);
+    if (!next) { setReviewError('Este trecho mudou. Revise o texto novamente.'); return; }
+    replaceRuns(next.runs);
+    onChange(next.text, next.runs);
+    setIssues(current => current.filter(item => item !== issue));
+    lastReviewed.current = '';
+    editor.current.focus();
+  };
   const getSelectionMetric = (kind: 'fontSize' | 'lineSpacing' | 'letterSpacing') => {
     const range = selection.current;
     if (!range || range.collapsed || !editor.current?.contains(range.startContainer)) return null;
@@ -169,7 +229,9 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichText
       <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => { if (/^#[0-9a-f]{6}$/i.test(color)) command('hiliteColor', color); }}>Grifar</button>
       <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => command('hiliteColor', 'transparent')}>Sem grifo</button>
     </div>}
-    <div ref={editor} className="rich-editable nodrag" contentEditable role="textbox" aria-label="Texto formatado do nó" aria-multiline="true" suppressContentEditableWarning onInput={() => { if (pending.current) clearTimeout(pending.current); pending.current = setTimeout(save, 450); }} onMouseUp={() => { paintSpan.current = null; rememberSelection(); }} onKeyUp={() => { paintSpan.current = null; rememberSelection(); }} onBlur={event => { save(); onDone?.(event.relatedTarget); }} onPaste={event => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); }} onKeyDown={event => { event.stopPropagation(); if (compact && event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); editor.current?.blur(); } if (event.key === 'Escape') editor.current?.blur(); }} />
+    <div ref={editor} className="rich-editable nodrag" contentEditable spellCheck lang={language} role="textbox" aria-label="Texto formatado do nó" aria-multiline="true" suppressContentEditableWarning onInput={() => { setIssues([]); setReviewOpen(false); if (pending.current) clearTimeout(pending.current); pending.current = setTimeout(save, 450); }} onMouseUp={() => { paintSpan.current = null; rememberSelection(); }} onKeyUp={() => { paintSpan.current = null; rememberSelection(); }} onBlur={event => { save(); onDone?.(event.relatedTarget); }} onPaste={event => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); }} onKeyDown={event => { event.stopPropagation(); if (compact && event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); editor.current?.blur(); } if (event.key === 'Escape') editor.current?.blur(); }} />
+    {compact && <div className="rich-proof-controls nodrag nopan nowheel"><Languages size={13}/><select aria-label="Idioma da correção" value={language} onChange={event => { onLanguageChange?.(event.target.value as ProofLanguage); setIssues([]); setReviewOpen(false); editor.current?.focus(); }}><option value="pt-BR">Português (Brasil)</option><option value="en-US">English (US)</option></select><button type="button" onMouseDown={event => event.preventDefault()} onClick={() => void reviewText(true)} disabled={reviewBusy} title="Revisar ortografia e gramática"><span>{reviewBusy ? 'Revisando…' : 'Revisar escrita'}</span>{reviewBusy ? <LoaderCircle size={12} className="spin"/> : issues.length > 0 ? <b>{issues.length}</b> : null}</button>{issues.length > 0 && <button type="button" aria-label="Mostrar sugestões" onMouseDown={event => event.preventDefault()} onClick={() => setReviewOpen(true)}>{issues.length} sugestão(ões)</button>}</div>}
+    {compact && reviewOpen && typeof document !== 'undefined' && createPortal(<div className={`rich-proof-panel ${editor.current?.closest(".app-shell.dark") ? "dark" : ""}`} role="dialog" aria-label="Sugestões de correção"><div className="rich-proof-header"><strong>Revisão de escrita</strong><button type="button" aria-label="Fechar sugestões" onMouseDown={event => event.preventDefault()} onClick={() => setReviewOpen(false)}><X size={15}/></button></div>{reviewError && <p role="alert">{reviewError}</p>}{!reviewError && !issues.length && <p>Nenhuma correção sugerida.</p>}{issues.map((issue, index) => <div className="rich-proof-issue" key={`${issue.original}:${index}`}><small>{issue.kind === 'grammar' ? 'Gramática' : 'Ortografia'}</small><strong>{issue.original}</strong>{issue.reason && <p>{issue.reason}</p>}<div>{issue.suggestions.map(suggestion => <button type="button" key={suggestion} onMouseDown={event => event.preventDefault()} onClick={() => applySuggestion(issue, suggestion)}><Check size={13}/>{suggestion}</button>)}</div></div>)}<small>As sugestões podem conter erros. Confira antes de aplicar.</small></div>, document.body)}
   </div>;
 });
 export default RichTextEditor;
