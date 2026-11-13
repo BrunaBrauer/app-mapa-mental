@@ -1,5 +1,5 @@
 'use client';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Bold, Check, Italic, Languages, LoaderCircle, Strikethrough, Underline, X } from 'lucide-react';
 import { readRichText, replaceRichTextPhrase, richTextHtml } from '../lib/rich-text';
@@ -23,7 +23,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichText
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewError, setReviewError] = useState('');
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!editor.current) return;
     const key = JSON.stringify({ text, runs });
     if (lastNode.current === nodeId && (editor.current.contains(document.activeElement) || key === lastSubmitted.current)) return;

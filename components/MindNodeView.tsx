@@ -16,6 +16,7 @@ export type FlowMindNode = Node<NodeData, 'mind'>;
 function MindNodeView({ data }: NodeProps<FlowMindNode>) {
   const { item } = data; const [editing, setEditing] = useState(data.editRequestKey !== undefined && !data.readOnly);
   const [selectPlaceholder, setSelectPlaceholder] = useState(data.editRequestKey !== undefined && !data.readOnly);
+  const handledEditRequest = useRef(data.editRequestKey);
   const [resizing, setResizing] = useState<{ width: number; height: number } | null>(null);
   const inlineEditor = useRef<RichTextEditorHandle>(null);
   const nodeRef = useRef<HTMLDivElement>(null);
@@ -32,6 +33,14 @@ function MindNodeView({ data }: NodeProps<FlowMindNode>) {
     return () => observer.disconnect();
   }, [onMeasured, item.id]);
   const startEditing = () => { setSelectPlaceholder(false); setEditing(true); data.onOpenQuick?.(item.id, 'style'); };
+  // React Flow may mount a new visual node before its edit request reaches node data.
+  useEffect(() => {
+    const key = data.editRequestKey;
+    if (key === undefined || key === handledEditRequest.current || data.readOnly) return;
+    handledEditRequest.current = key;
+    const frame = requestAnimationFrame(() => { setSelectPlaceholder(true); setEditing(true); });
+    return () => cancelAnimationFrame(frame);
+  }, [data.editRequestKey, data.readOnly]);
   const isRoot = !item.parentId && !item.floating;
   const shape = data.mapLayout === 'treemap' ? 'rectangle' : data.mapLayout === 'flowchart' && item.flowDecision ? 'diamond' : item.shape ?? 'rounded';
   const polygons: Record<string, string> = {

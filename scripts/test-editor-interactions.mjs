@@ -17,6 +17,9 @@ assert.match(canvas, /closest\('input,textarea,select,\[contenteditable="true"\]
 assert.match(canvas, /panActivationKeyCode=\{null\}/, 'React Flow must not capture Space independently');
 assert.match(canvas, /autoPanOnNodeDrag=\{false\}/, 'Dragging must not pan the map out of view');
 assert.match(richText, /onKeyDown=\{event => \{ event\.stopPropagation\(\);/, 'Text keystrokes must stay inside the editor');
+assert.match(editor, /<MapCanvas key=\{active\.id\}/, 'Opening another map resets the canvas viewport');
+assert.match(canvas, /useNodesInitialized\(\)/, 'Opening a map waits for node measurements before the final fit');
+assert.match(nodeView, /handledEditRequest\.current = key;[\s\S]*?setSelectPlaceholder\(true\); setEditing\(true\)/, 'A late edit request also opens the new node editor');
 assert.match(css, /caret-color:var\(--accent\)/, 'The insertion caret must remain visible');
 assert.match(css, /react-flow__node\.draggable\.dragging \.mind-node\{cursor:grabbing\}/, 'Dragging must expose a stable cursor');
 assert.match(canvas, /map\.siblingReorder !== false && requested\.size === 1/, 'Aligned reordering is enabled by default and can be disabled');

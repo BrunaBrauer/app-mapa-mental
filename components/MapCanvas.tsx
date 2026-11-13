@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ReactFlow, Background, BackgroundVariant, Controls, ConnectionLineType, ConnectionMode, MarkerType, ReactFlowProvider, SelectionMode, ViewportPortal, useReactFlow, useViewport, type Connection, type NodeChange, type Node, type NodePositionChange } from '@xyflow/react';
+import { ReactFlow, Background, BackgroundVariant, Controls, ConnectionLineType, ConnectionMode, MarkerType, ReactFlowProvider, SelectionMode, ViewportPortal, useNodesInitialized, useReactFlow, useViewport, type Connection, type NodeChange, type Node, type NodePositionChange } from '@xyflow/react';
 import MindNodeView, { type FlowMindNode } from './MindNodeView';
 import type { ImportedFont } from '../lib/fonts';
 import StyledEdge from './StyledEdge';
@@ -22,6 +22,8 @@ const edgeMarker = (symbol: LineStyle['end'], color: string) => symbol === 'arro
 const edgeDash = (style?: LineStyle) => style?.pattern === 'dashed' ? '8 5' : style?.pattern === 'dotted' ? '2 5' : undefined;
 function InnerCanvas({ map, previewNodes, resizingGroup = false, onResizeStart, onResizePreview, onResizeEnd, onResizeCancel, selectedId, selectedIds = selectedId ? [selectedId] : [], editRequest, onEditDone, selectedBoundary, onSelectBoundary, globalMovementMode = 'hierarchical', globalAvoidOverlap = true, temporaryBranchId, onTemporaryBranchDone, onMoveNotice, onSelect, onSelectMany, onSelectEdge, onChange, onGeometryChange, onAdd, onEdit, onToggle, onAction, onOpenLinkedMaps, onVisual, onOpenQuick, onPatch, onImage, onDrivePick, onTagToggle, onCreateTag, tags, fonts, onImportFont, onFavoriteIcons, favoriteColors, onFavoriteColor, quickPanel, alwaysToolbar = true, onToggleAlwaysToolbar, grid, readOnly, flowRef }: Props) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const nodesInitialized = useNodesInitialized();
+  const fittedMap = useRef<string | null>(null);
   const viewport = useViewport();
   const groupResizeDrag = useRef<{ x: number; y: number; zoom: number; axis: 'width' | 'height' | null; dx: number; dy: number } | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -79,6 +81,15 @@ function InnerCanvas({ map, previewNodes, resizingGroup = false, onResizeStart, 
     flowRef.current = { zoomIn: () => zoomIn(), zoomOut: () => zoomOut(), fit: () => fitView({ padding: 0.22, duration: 400 }) };
     return () => { flowRef.current = null; };
   }, [flowRef, zoomIn, zoomOut, fitView]);
+  useEffect(() => {
+    if (!nodesInitialized || fittedMap.current === map.id) return;
+    // React Flow's initial fit may run before custom node measurements settle.
+    const timer = setTimeout(() => {
+      fittedMap.current = map.id;
+      void fitView({ padding: 0.2, maxZoom: 1.25, duration: 180 });
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [map.id, nodesInitialized, fitView]);
   const visible = useMemo(() => visibleNodes(previewNodes || map.nodes), [previewNodes, map.nodes]);
   const displayVisible = useMemo(() => {
     if (map.layout !== 'treemap') return visible;
